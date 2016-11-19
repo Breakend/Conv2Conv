@@ -19,12 +19,13 @@ DATA_URL = "http://www.mpi-sws.org/~cristian/data/cornell_movie_dialogs_corpus.z
 class CornellMovieData(dataset.Dataset):
 
     @staticmethod
-    def get_line_pairs(data_dir):
+    def get_line_pairs(data_dir=DEFAULT_DATA_DIR):
         lines_by_number = {}
         with open(os.path.join(data_dir, 'movie_lines.txt')) as lines:
             for line in lines:
                 lines_by_number[line.split()[0]] = line.split('+++$+++ ')[-1]
 
+        dialogue_tuples = []
 
         with open(os.path.join(data_dir, 'movie_conversations.txt')) as conversations:
 
@@ -49,6 +50,7 @@ class CornellMovieData(dataset.Dataset):
                     if conv_lines[i] in lines_by_number and conv_lines[i + 1] in lines_by_number:
                         source.write(lines_by_number[conv_lines[i]])
                         target.write(lines_by_number[conv_lines[i + 1]])
+                        dialogue_tuples.append(lines_by_number[conv_lines[i]], lines_by_number[conv_lines[i + 1]])
                     if conv_lines[i] not in lines_by_number:
                         print("Could not find " + conv_lines[i] + "in movie lines")
                     if conv_lines[i + 1] not in lines_by_number:
@@ -56,9 +58,10 @@ class CornellMovieData(dataset.Dataset):
 
             source.close()
             target.close()
+            return dialogue_tuples
 
     @staticmethod
-    def maybe_download_and_extract(dest_directory):
+    def maybe_download_and_extract(dest_directory=DEFAULT_DATA_DIR):
       """Download and extract the tarball from the Cornell website"""
 
       if not os.path.exists(dest_directory):

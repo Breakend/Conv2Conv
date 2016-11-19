@@ -1,5 +1,7 @@
 from utils import *
 import tensorflow as tf
+import numpy
+
 rng = numpy.random
 
 
@@ -41,7 +43,7 @@ def postprocessing_layer(inputs, skip_channels, use_biases, quantization_channel
             conv2 = tf.add(conv2, b2)
         return conv2
 
-def dilated_stack(current_layer, filter_width, residual_channels, dilation_channels, skip_channels, use_biases, dilations):
+def dilated_stack(current_layer, filter_width, residual_channels, dilation_channels, skip_channels, use_biases, dilations, conditional_variable):
     outputs = list()
     with tf.name_scope('dilated_stack'):
         for layer_index, dilation in enumerate(dilations):
@@ -49,7 +51,7 @@ def dilated_stack(current_layer, filter_width, residual_channels, dilation_chann
                 output, current_layer = _create_dilation_layer(
                     current_layer, layer_index, dilation,
                     filter_width, dilation_channels, residual_channels,
-                    use_biases, skip_channels)
+                    use_biases, skip_channels, conditional_variable)
                 outputs.append(output)
     return outputs
 
@@ -81,12 +83,18 @@ def _create_dilation_layer(input_batch, layer_index, dilation, filter_width, dil
         conv_filter = tf.add(conv_filter, filter_bias)
         conv_gate = tf.add(conv_gate, gate_bias)
 
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     # [A x input_batch] * [input_batch x h_1]
 
-    if conditional_variable:
-        conditional_filter = tf.Variable(rng.randn(), name='conditional_filter')
-        conditional_gate = tf.Variable(rng.randn(), name='conditional_gate')
+    if conditional_variable is not None:
+        # import pdb; pdb.set_trace()
+        # TODO: idk if this is right
+        # conditional_variable = tf.squeeze(conditional_variable)
+        condition_size =  int(conditional_variable.get_shape()[-1])
+        conditional_variable = tf.reshape(conditional_variable, [-1, -1])
+
+        conditional_filter = tf.Variable(tf.random_normal([condition_size, dilation_channels], name='conditional_filter'))
+        conditional_gate = tf.Variable(tf.random_normal([condition_size, dilation_channels], name='conditional_gate'))
 
         conditional_gate = tf.matmul(conditional_variable, conditional_gate)
         conditional_gate_bias = create_bias_variable('cond_gate_bias', [dilation_channels])
