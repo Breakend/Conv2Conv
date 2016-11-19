@@ -2,7 +2,7 @@ from __future__ import division
 
 import tensorflow as tf
 
-def one_hot(input_batch, batch_size, quantization_channels):
+def one_hot(input_batch, quantization_channels, batch_size, quantization_channels):
     '''One-hot encodes the waveform amplitudes.
     This allows the definition of the network as a categorical distribution
     over a finite set of possible amplitudes.

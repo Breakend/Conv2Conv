@@ -1,5 +1,7 @@
 from utils import *
 import tensorflow as tf
+rng = numpy.random
+
 
 
 def causal_layer(input_batch, embedding_size, filter_width, residual_channels):
@@ -51,7 +53,7 @@ def dilated_stack(current_layer, filter_width, residual_channels, dilation_chann
                 outputs.append(output)
     return outputs
 
-def _create_dilation_layer(input_batch, layer_index, dilation, filter_width, dilation_channels, residual_channels, use_biases, skip_channels):
+def _create_dilation_layer(input_batch, layer_index, dilation, filter_width, dilation_channels, residual_channels, use_biases, skip_channels, conditional_variable=None):
     '''Creates a single causal dilated convolution layer.
 
     The layer contains a gated filter that connects to dense output
@@ -79,7 +81,24 @@ def _create_dilation_layer(input_batch, layer_index, dilation, filter_width, dil
         conv_filter = tf.add(conv_filter, filter_bias)
         conv_gate = tf.add(conv_gate, gate_bias)
 
-    out = tf.tanh(conv_filter) * tf.sigmoid(conv_gate)
+    import pdb; pdb.set_trace()
+    # [A x input_batch] * [input_batch x h_1]
+
+    if conditional_variable:
+        conditional_filter = tf.Variable(rng.randn(), name='conditional_filter')
+        conditional_gate = tf.Variable(rng.randn(), name='conditional_gate')
+
+        conditional_gate = tf.matmul(conditional_variable, conditional_gate)
+        conditional_gate_bias = create_bias_variable('cond_gate_bias', [dilation_channels])
+        conditional_gate = tf.add(conditional_gate, conditional_gate_bias)
+
+        conditional_filter = tf.matmul(conditional_variable, conditional_filter)
+        conditional_filter_bias = create_bias_variable('cond_filter_bias', [dilation_channels])
+        conditional_filter = tf.add(conditional_filter, conditional_filter_bias)
+
+        out = tf.tanh(conv_filter + conditional_filter) * tf.sigmoid(conv_gate + conditional_gate)
+    else:
+        out = tf.tanh(conv_filter) * tf.sigmoid(conv_gate)
 
     # The 1x1 conv to produce the residual output
     weights_dense = create_variable('dense', [1, dilation_channels, residual_channels])

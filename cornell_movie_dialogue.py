@@ -16,7 +16,7 @@ import dataset
 DEFAULT_DATA_DIR = os.path.join(os.getcwd(), "data", "cornell")
 DATA_URL = "http://www.mpi-sws.org/~cristian/data/cornell_movie_dialogs_corpus.zip"
 
-class CornellMovieData(object):
+class CornellMovieData(dataset.Dataset):
 
     @staticmethod
     def get_line_pairs(data_dir):

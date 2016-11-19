@@ -20,7 +20,7 @@ class Conv2Conv(object):
     def loss(self,
              input_batch,
              l2_regularization_strength=None,
-             name='wavenet'):
+             name='conv2conv'):
         '''Creates a WaveNet network and returns the autoencoding loss.
         The variables are all scoped to the given name.
         '''
@@ -63,6 +63,24 @@ class Conv2Conv(object):
                     tf.scalar_summary('total_loss', total_loss)
 
                     return total_loss
+
+    def predict_proba(self, waveform, name='conv2conv'):
+        '''Computes the probability distribution of the next sample based on
+        all samples in the input waveform.
+        If you want to generate audio by feeding the output of the network back
+        as an input, see predict_proba_incremental for a faster alternative.'''
+        with tf.name_scope(name):
+            encoded = one_hot(tf.cast(waveform, tf.int32), self.batch_size, self.quantization_channels)
+            raw_output = self._create_network(encoded)
+            out = tf.reshape(raw_output, [-1, self.quantization_channels])
+            # Cast to float64 to avoid bug in TensorFlow
+            proba = tf.cast(
+                tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
+            last = tf.slice(
+                proba,
+                [tf.shape(proba)[0] - 1, 0],
+                [1, self.quantization_channels])
+            return tf.reshape(last, [-1])
 
     def _create_network(self, input_batch):
         with tf.variable_scope('conv2conv'):

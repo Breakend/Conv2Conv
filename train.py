@@ -186,9 +186,10 @@ def main():
         skip_channels=wavenet_params["skip_channels"],
         use_biases=wavenet_params["use_biases"],
         dilations=wavenet_params["dilations"])
+
     if args.l2_regularization_strength == 0:
         args.l2_regularization_strength = None
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     loss = net.loss(text_batch, args.l2_regularization_strength)
     optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
     trainable = tf.trainable_variables()
@@ -200,7 +201,7 @@ def main():
     sess.run(init)
 
     # Saver for storing checkpoints of the model.
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(tf.all_variables())
 
     try:
         saved_global_step = load(saver, sess, restore_from)
