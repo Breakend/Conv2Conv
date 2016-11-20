@@ -9,20 +9,23 @@ import os
 import sys
 import time
 
+import numpy as np
 import tensorflow as tf
+from tensorflow.python.framework import ops
 
-from conversation_reader import ConversationReader
+from cornell_movie_dialogue import CornellMovieData
 from model import Conv2Conv
+from tqdm import tqdm
 
 BATCH_SIZE = 1
 DATA_DIRECTORY = './data'
 LOGDIR_ROOT = './logdir'
-CHECKPOINT_EVERY = 500
+CHECKPOINT_EVERY = 100
 NUM_STEPS = 4000
 LEARNING_RATE = 0.001
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
-SAMPLE_SIZE = 1000
+SAMPLE_SIZE = None # TODO: this is probably bad
 L2_REGULARIZATION_STRENGTH = 0
 
 
@@ -168,15 +171,55 @@ def main():
     # Create coordinator.
     coord = tf.train.Coordinator()
 
-    # Load raw text.
-    with tf.name_scope('create_inputs'):
-        #TODO: replace the craziness going on in the conversation reader with:
-        # https://ischlag.github.io/2016/06/19/tensorflow-input-pipeline-example/
-        reader = ConversationReader(
-            args.data_dir,
-            coord,
-            sample_size=args.sample_size)
-        text_batch, response_batch = reader.dequeue(args.batch_size)
+    dataset = CornellMovieData
+    dataset.maybe_download_and_extract()
+    dialogue_tuples = dataset.get_line_pairs()
+
+    queries = []
+    responses = []
+
+    for query, response in dialogue_tuples:
+        query = map(lambda x: ord(x), list(query))
+        query = np.array(query, dtype='float32')
+        query = query.reshape(-1, 1)
+        response = map(lambda x: ord(x), list(response))
+        response = np.array(response, dtype='float32')
+        response = response.reshape(-1, 1)
+        queries.append(query)
+        responses.append(response)
+
+    # import pdb; pdb.set_trace()
+    queries = np.asarray(queries)
+    responses = np.asarray(responses)
+    # q_pl = tf.placeholder(dtype=tf.float32, shape=None)
+    # rq_pl = tf.placeholder(dtype=tf.float32, shape=None)
+    # q = tf.PaddingFIFOQueue(len(queries), ['float32'], shapes=[(None, 1)])
+    # rq = tf.PaddingFIFOQueue(len(queries), ['float32'], shapes=[(None, 1)])
+
+    # with tf.Session() as sess:
+    query_init = tf.placeholder(dtype=tf.float32,
+                                    shape=(None, None, 1))
+    response_init = tf.placeholder(dtype=tf.float32,
+                                    shape=(None, None, 1))
+    # input_queries = tf.Variable(query_init, trainable=False)
+    # input_responses = tf.Variable(response_init, trainable=False)
+    # ...
+    # sess.run(input_queries.initializer,
+    #        feed_dict={query_init: queries})
+    # sess.run(input_responses.initializer,
+    #        feed_dict={response_init: responses})
+    # query_batch, response_batch = tf.train.batch([query_init, response_init], batch_size=BATCH_SIZE,     dynamic_pad=True)
+
+    # enqueue_op = q.enqueue_many(queries)
+    # enqueue_response_op = rq.enqueue_many(responses)
+    # sess.run(enqueue_op)
+    # sess.run(enqueue_response_op)
+
+    # text_batch, response_batch = tf.train.batch(
+    #                                     [queries, responses],
+    #                                     batch_size=BATCH_SIZE
+    #                                     #,num_threads=1
+    #                                     )
 
     # Create network.
     net = Conv2Conv(
@@ -192,7 +235,7 @@ def main():
     if args.l2_regularization_strength == 0:
         args.l2_regularization_strength = None
     # import pdb; pdb.set_trace()
-    loss = net.loss(text_batch, response_batch, args.l2_regularization_strength)
+    loss = net.loss(query_init, response_init, args.l2_regularization_strength)
     optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
     trainable = tf.trainable_variables()
     optim = optimizer.minimize(loss, var_list=trainable)
@@ -219,7 +262,7 @@ def main():
         raise
 
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-    reader.start_threads(sess)
+    # reader.start_threads(sess)
     summary_op = tf.merge_all_summaries()
     writer = tf.train.SummaryWriter(logdir, graph=tf.get_default_graph())
 
@@ -227,7 +270,9 @@ def main():
         last_saved_step = saved_global_step
         for step in range(saved_global_step + 1, args.num_steps):
             start_time = time.time()
-            loss_value, _, summary = sess.run([loss, optim, summary_op])
+            #TODO: batch this somehow, remove summary until after???
+            for i in tqdm(range(len(queries))):
+                loss_value, _, summary = sess.run([loss, optim, summary_op], feed_dict= {query_init : [queries[i]], response_init: [responses[i]]})
             writer.add_summary(summary, step)
             print("fin step", step)
             duration = time.time() - start_time

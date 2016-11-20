@@ -7,25 +7,6 @@ import tensorflow as tf
 from cornell_movie_dialogue import CornellMovieData
 
 
-def load_generic_text(dataset, directory):
-    '''Generator that yields text raw from the directory.'''
-    #TODO: yield line pairs from dataset, but turn to list() first
-    dataset.maybe_download_and_extract()
-
-    # TODO: make this read it one at a time maybe to conserve RAM? for this dataset should be okay,
-    # but for larger ones it definitely won't
-    dialogue_tuples = dataset.get_line_pairs()
-
-    for query, response in dialogue_tuples:
-        query = map(lambda x: ord(x), query)
-        query = np.array(query, dtype='float32')
-        query = query.reshape(-1, 1)
-        response = map(lambda x: ord(x), response)
-        response = np.array(response, dtype='float32')
-        response = response.reshape(-1, 1)
-        yield query, response
-
-
 class ConversationReader(object):
     '''Generic background text reader that preprocesses text files
     and enqueues them into a TensorFlow queue.'''
@@ -56,36 +37,44 @@ class ConversationReader(object):
         return output, output2
 
     def thread_main(self, sess):
-        buffer_ = np.array([])
-        response_buffer_ = np.array([])
         stop = False
+        dataset = CornellMovieData
+        dataset.maybe_download_and_extract()
+        dialogue_tuples = dataset.get_line_pairs()
         # Go through the dataset multiple times
         while not stop:
             # import pdb; pdb.set_trace()
-            iterator = load_generic_text(CornellMovieData, self.text_dir)
-            for text, response in iterator:
+            for query, response in dialogue_tuples:
+                query = map(lambda x: ord(x), query)
+                query = np.array(query, dtype='float32')
+                query = query.reshape(-1, 1)
+                response = map(lambda x: ord(x), response)
+                response = np.array(response, dtype='float32')
+                response = response.reshape(-1, 1)
+                buffer_ = np.array([])
+                response_buffer_ = np.array([])
                 if self.coord.should_stop():
                     self.stop_threads()
                     stop = True
                     break
                 if self.sample_size:
                     # Cut samples into fixed size pieces
-                    buffer_ = np.append(buffer_, text)
+                    buffer_ = np.append(buffer_, query)
+                    response_buffer_ = np.append(response_buffer_, response)
+                    #TODO: i think there might be an off by one error here, like are we leaving out the last batch?
                     while len(buffer_) > self.sample_size:
                         piece = np.reshape(buffer_[:self.sample_size], [-1, 1])
                         sess.run(self.enqueue_input,
                                  feed_dict={self.sample_placeholder: piece})
                         buffer_ = buffer_[self.sample_size:]
-                    response_buffer_ = np.append(response_buffer_, response)
                     while len(response_buffer_) > self.sample_size:
                         piece = np.reshape(response_buffer_[:self.sample_size], [-1, 1])
                         sess.run(self.enqueue_response,
                                  feed_dict={self.response_placeholder: piece})
                         response_buffer_ = response_buffer_[self.sample_size:]
-                    response_buffer_ = np.append(response_buffer_, response)
                 else:
                     sess.run(self.enqueue_input,
-                             feed_dict={self.sample_placeholder: text})
+                             feed_dict={self.sample_placeholder: query})
                     sess.run(self.enqueue_response,
                              feed_dict={self.response_placeholder: response})
 
