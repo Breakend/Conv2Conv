@@ -14,14 +14,13 @@ def load_generic_text(dataset, directory):
 
     # TODO: make this read it one at a time maybe to conserve RAM? for this dataset should be okay,
     # but for larger ones it definitely won't
-    dialogue_tuples = get_line_pairs()
+    dialogue_tuples = dataset.get_line_pairs()
 
-    files = find_files(directory)
     for query, response in dialogue_tuples:
         query = map(lambda x: ord(x), query)
-        response = map(lambda x: ord(x), response)
         query = np.array(query, dtype='float32')
         query = query.reshape(-1, 1)
+        response = map(lambda x: ord(x), response)
         response = np.array(response, dtype='float32')
         response = response.reshape(-1, 1)
         yield query, response
@@ -62,6 +61,7 @@ class ConversationReader(object):
         stop = False
         # Go through the dataset multiple times
         while not stop:
+            # import pdb; pdb.set_trace()
             iterator = load_generic_text(CornellMovieData, self.text_dir)
             for text, response in iterator:
                 if self.coord.should_stop():
@@ -73,18 +73,18 @@ class ConversationReader(object):
                     buffer_ = np.append(buffer_, text)
                     while len(buffer_) > self.sample_size:
                         piece = np.reshape(buffer_[:self.sample_size], [-1, 1])
-                        sess.run(self.enqueue,
+                        sess.run(self.enqueue_input,
                                  feed_dict={self.sample_placeholder: piece})
                         buffer_ = buffer_[self.sample_size:]
                     response_buffer_ = np.append(response_buffer_, response)
                     while len(response_buffer_) > self.sample_size:
                         piece = np.reshape(response_buffer_[:self.sample_size], [-1, 1])
-                        sess.run(self.enqueue,
-                                 feed_dict={self.sample_placeholder: piece})
+                        sess.run(self.enqueue_response,
+                                 feed_dict={self.response_placeholder: piece})
                         response_buffer_ = response_buffer_[self.sample_size:]
                     response_buffer_ = np.append(response_buffer_, response)
                 else:
-                    sess.run(self.enqueue,
+                    sess.run(self.enqueue_input,
                              feed_dict={self.sample_placeholder: text})
                     sess.run(self.enqueue_response,
                              feed_dict={self.response_placeholder: response})

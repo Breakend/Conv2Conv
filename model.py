@@ -21,7 +21,22 @@ class Conv2Conv(object):
         wavenet = WaveNet(self.batch_size, self.quantization_channels, self.filter_width, self.residual_channels, self.dilation_channels, self.skip_channels, self.use_biases, self.dilations)
 
         encoder = wavenet._create_network(input_batch, scope_name="encoder")
-        decoder = wavenet._create_network(response_batch, encoder, scope_name="decoder")
+
+        # TODO: probably don't want softmax here, but rather just 1dconv to flatten shape
+        # TODO: actually need to squash this such that it predicts only 1 vector, shouldn't be a batch here???
+        transformed1 = tf.nn.relu(encoder)
+        transformed1 = tf.reduce_mean(transformed1, 1)
+        # import pdb; pdb.set_trace()
+        # weights_skip = create_variable('encoding_pooling', [1, self.quantization_channels, self.quantization_channels])
+        # transformed1 = tf.nn.conv1d(transformed1, weights_skip, stride=1, padding="SAME", name="skip")
+            # Fully connected layer
+        # Reshape conv2 output to fit fully connected layer input
+        # weights_skip = create_variable('encoding_pooling', [transformed1.get_shape()[1]*])
+        # fc1 = tf.reshape(conv2, [-1, weights['wd1'].get_shape().as_list()[0]])
+        # fc1 = tf.add(tf.matmul(fc1, weights['wd1']), biases['bd1'])
+        # fc1 = tf.nn.relu(fc1)
+        # conv1 = tf.nn.conv1d(transformed1, w1, stride=1, padding="SAME")
+        decoder = wavenet._create_network(response_batch, transformed1, scope_name="decoder")
         return decoder
 
     def loss(self,
@@ -177,17 +192,18 @@ class WaveNet(object):
                                             self.residual_channels)
 
             self.dilated_layer = dilated_stack(self.causal_layer,
+                                                   self.batch_size,
                                                    self.filter_width,
                                                    self.residual_channels,
                                                    self.dilation_channels,
                                                    self.skip_channels,
                                                    self.use_biases,
                                                    self.dilations,
-                                                   conditional_variable)
+                                                   conditional_variable, scope_name)
 
             self.postprocessing_layer = postprocessing_layer(self.dilated_layer,
                                                             self.skip_channels,
                                                             self.use_biases,
-                                                            self.quantization_channels)
+                                                            self.quantization_channels, scope_name)
 
             return self.postprocessing_layer

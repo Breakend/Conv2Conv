@@ -50,7 +50,7 @@ class CornellMovieData(dataset.Dataset):
                     if conv_lines[i] in lines_by_number and conv_lines[i + 1] in lines_by_number:
                         source.write(lines_by_number[conv_lines[i]])
                         target.write(lines_by_number[conv_lines[i + 1]])
-                        dialogue_tuples.append(lines_by_number[conv_lines[i]], lines_by_number[conv_lines[i + 1]])
+                        dialogue_tuples.append((lines_by_number[conv_lines[i]], lines_by_number[conv_lines[i + 1]]))
                     if conv_lines[i] not in lines_by_number:
                         print("Could not find " + conv_lines[i] + "in movie lines")
                     if conv_lines[i + 1] not in lines_by_number:

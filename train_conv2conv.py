@@ -170,6 +170,8 @@ def main():
 
     # Load raw text.
     with tf.name_scope('create_inputs'):
+        #TODO: replace the craziness going on in the conversation reader with:
+        # https://ischlag.github.io/2016/06/19/tensorflow-input-pipeline-example/
         reader = ConversationReader(
             args.data_dir,
             coord,
@@ -196,7 +198,7 @@ def main():
     optim = optimizer.minimize(loss, var_list=trainable)
 
     # Set up session
-    sess = tf.Session(config=tf.ConfigProto(log_device_placement=False))
+    sess = tf.Session(config=tf.ConfigProto(log_device_placement=False, operation_timeout_in_ms=20000))
     init = tf.initialize_all_variables()
     sess.run(init)
 
@@ -218,12 +220,15 @@ def main():
 
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
     reader.start_threads(sess)
+    summary_op = tf.merge_all_summaries()
+    writer = tf.train.SummaryWriter(logdir, graph=tf.get_default_graph())
 
     try:
         last_saved_step = saved_global_step
         for step in range(saved_global_step + 1, args.num_steps):
             start_time = time.time()
-            loss_value, _ = sess.run([loss, optim])
+            loss_value, _, summary = sess.run([loss, optim, summary_op])
+            writer.add_summary(summary, step)
             print("fin step", step)
             duration = time.time() - start_time
             print('step {:d} - loss = {:.3f}, ({:.3f} sec/step)'

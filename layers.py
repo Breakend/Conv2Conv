@@ -12,7 +12,7 @@ def causal_layer(input_batch, embedding_size, filter_width, residual_channels):
         filter_var = create_variable('filter', var_shape)
         return causal_conv(input_batch, filter_var, 1)
 
-def postprocessing_layer(inputs, skip_channels, use_biases, quantization_channels):
+def postprocessing_layer(inputs, skip_channels, use_biases, quantization_channels, scope="conv2conv"):
     with tf.name_scope('postprocessing'):
         # Perform (+) -> ReLU -> 1x1 conv -> ReLU -> 1x1 conv to
         # postprocess the output.
@@ -24,11 +24,11 @@ def postprocessing_layer(inputs, skip_channels, use_biases, quantization_channel
             b1 = create_bias_variable('postprocess1_bias', [skip_channels])
             b2 = create_bias_variable('postprocess2_bias', [quantization_channels])
 
-        tf.histogram_summary('postprocess1_weights', w1)
-        tf.histogram_summary('postprocess2_weights', w2)
+        tf.histogram_summary(scope + '_postprocess1_weights', w1)
+        tf.histogram_summary(scope + '_postprocess2_weights', w2)
         if use_biases:
-            tf.histogram_summary('postprocess1_biases', b1)
-            tf.histogram_summary('postprocess2_biases', b2)
+            tf.histogram_summary(scope + '_postprocess1_biases', b1)
+            tf.histogram_summary(scope + '_postprocess2_biases', b2)
 
         # We skip connections from the outputs of each layer, adding them
         # all up here.
@@ -43,19 +43,19 @@ def postprocessing_layer(inputs, skip_channels, use_biases, quantization_channel
             conv2 = tf.add(conv2, b2)
         return conv2
 
-def dilated_stack(current_layer, filter_width, residual_channels, dilation_channels, skip_channels, use_biases, dilations, conditional_variable):
+def dilated_stack(current_layer, batch_size, filter_width, residual_channels, dilation_channels, skip_channels, use_biases, dilations, conditional_variable, scope="conv2conv"):
     outputs = list()
     with tf.name_scope('dilated_stack'):
         for layer_index, dilation in enumerate(dilations):
             with tf.name_scope('layer{}'.format(layer_index)):
                 output, current_layer = _create_dilation_layer(
-                    current_layer, layer_index, dilation,
+                    current_layer, batch_size, layer_index, dilation,
                     filter_width, dilation_channels, residual_channels,
-                    use_biases, skip_channels, conditional_variable)
+                    use_biases, skip_channels, conditional_variable, scope)
                 outputs.append(output)
     return outputs
 
-def _create_dilation_layer(input_batch, layer_index, dilation, filter_width, dilation_channels, residual_channels, use_biases, skip_channels, conditional_variable=None):
+def _create_dilation_layer(input_batch, batch_size, layer_index, dilation, filter_width, dilation_channels, residual_channels, use_biases, skip_channels, conditional_variable=None, scope="conv2conv"):
     '''Creates a single causal dilated convolution layer.
 
     The layer contains a gated filter that connects to dense output
@@ -91,7 +91,7 @@ def _create_dilation_layer(input_batch, layer_index, dilation, filter_width, dil
         # TODO: idk if this is right
         # conditional_variable = tf.squeeze(conditional_variable)
         condition_size =  int(conditional_variable.get_shape()[-1])
-        conditional_variable = tf.reshape(conditional_variable, [-1, -1])
+        conditional_variable = tf.reshape(conditional_variable, [-1, condition_size])
 
         conditional_filter = tf.Variable(tf.random_normal([condition_size, dilation_channels], name='conditional_filter'))
         conditional_gate = tf.Variable(tf.random_normal([condition_size, dilation_channels], name='conditional_gate'))
@@ -123,14 +123,14 @@ def _create_dilation_layer(input_batch, layer_index, dilation, filter_width, dil
         skip_contribution = skip_contribution + skip_bias
 
     layer = 'layer{}'.format(layer_index)
-    tf.histogram_summary(layer + '_filter', weights_filter)
-    tf.histogram_summary(layer + '_gate', weights_gate)
-    tf.histogram_summary(layer + '_dense', weights_dense)
-    tf.histogram_summary(layer + '_skip', weights_skip)
+    tf.histogram_summary(scope + layer + '_filter', weights_filter)
+    tf.histogram_summary(scope + layer + '_gate', weights_gate)
+    tf.histogram_summary(scope + layer + '_dense', weights_dense)
+    tf.histogram_summary(scope + layer + '_skip', weights_skip)
     if use_biases:
-        tf.histogram_summary(layer + '_biases_filter', filter_bias)
-        tf.histogram_summary(layer + '_biases_gate', gate_bias)
-        tf.histogram_summary(layer + '_biases_dense', dense_bias)
-        tf.histogram_summary(layer + '_biases_skip', skip_bias)
+        tf.histogram_summary(scope + layer + '_biases_filter', filter_bias)
+        tf.histogram_summary(scope + layer + '_biases_gate', gate_bias)
+        tf.histogram_summary(scope + layer + '_biases_dense', dense_bias)
+        tf.histogram_summary(scope + layer + '_biases_skip', skip_bias)
 
     return skip_contribution, input_batch + transformed
