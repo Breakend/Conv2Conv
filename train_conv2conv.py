@@ -20,7 +20,7 @@ from tqdm import tqdm
 BATCH_SIZE = 1
 DATA_DIRECTORY = './data'
 LOGDIR_ROOT = './logdir'
-CHECKPOINT_EVERY = 100
+CHECKPOINT_EVERY = 500
 NUM_STEPS = 4000
 LEARNING_RATE = 0.001
 WAVENET_PARAMS = './wavenet_params.json'
@@ -179,6 +179,8 @@ def main():
     responses = []
 
     for query, response in dialogue_tuples:
+        # TODO: add "STOP" char and then in the generator look for "STOP" char to stop generating
+        # TODO: batching
         query = map(lambda x: ord(x), list(query))
         query = np.array(query, dtype='float32')
         query = query.reshape(-1, 1)
@@ -268,20 +270,25 @@ def main():
 
     try:
         last_saved_step = saved_global_step
-        for step in range(saved_global_step + 1, args.num_steps):
+        for epoch in range(saved_global_step + 1, args.num_steps):
+            step = epoch*len(queries)
             start_time = time.time()
-            #TODO: batch this somehow, remove summary until after???
             for i in tqdm(range(len(queries))):
+                step = epoch*len(queries)+i
+                #TODO: omg batches
                 loss_value, _, summary = sess.run([loss, optim, summary_op], feed_dict= {query_init : [queries[i]], response_init: [responses[i]]})
-            writer.add_summary(summary, step)
-            print("fin step", step)
+                if step % args.checkpoint_every == 0:
+                    save(saver, sess, logdir, step)
+                    writer.add_summary(summary, step)
+                    last_saved_step = step
+            print("fin epoch", step)
             duration = time.time() - start_time
-            print('step {:d} - loss = {:.3f}, ({:.3f} sec/step)'
-                  .format(step, loss_value, duration))
+            print('epoch {:d} - loss = {:.3f}, ({:.3f} sec/step)'
+                  .format(epoch, loss_value, duration))
 
-            if step % args.checkpoint_every == 0:
-                save(saver, sess, logdir, step)
-                last_saved_step = step
+            # if step % args.checkpoint_every == 0:
+            #     save(saver, sess, logdir, step)
+            #     last_saved_step = step
 
     except KeyboardInterrupt:
         # Introduce a line break after ^C is displayed so save message
