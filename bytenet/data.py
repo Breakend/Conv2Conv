@@ -4,10 +4,11 @@ import numpy as np
 
 class CornellDataFeeder(object):
 
-    def __init__(self, batch_size=16, name='train'):
+    def __init__(self, batch_size=16, name='train', load=True):
 
         # load train corpus
         sources, targets = self._load_corpus(mode='train')
+        self.batch_size = batch_size
 
         # to constant tensor
         source = tf.convert_to_tensor(sources)
@@ -34,15 +35,14 @@ class CornellDataFeeder(object):
 
         # load en-fr parallel corpus
         from cornell_movie_dialogue import CornellMovieData
-        als = comtrans.aligned_sents('alignment-en-fr.txt')
         CornellMovieData.maybe_download_and_extract()
-        line_pairsCornellMovieData.get_line_pairs()
+        als = CornellMovieData.get_line_pairs()
 
         # make character-level parallel corpus
         all_byte, sources, targets = [], [], []
         for query, reply in als:
-            src = [ord(ch) for ch in ' '.join(query)]  # source language byte stream
-            tgt = [ord(ch) for ch in ' '.join(reply)]  # target language byte stream
+            src = [ord(ch) for ch in query]  # source language byte stream
+            tgt = [ord(ch) for ch in reply]  # target language byte stream
             sources.append(src)
             targets.append(tgt)
             all_byte.extend(src + tgt)
@@ -53,12 +53,13 @@ class CornellDataFeeder(object):
         for i, b in enumerate(self.index2byte):
             self.byte2index[b] = i
         self.voca_size = len(self.index2byte)
-        self.max_len = 150
+        print("Vocab size: %d" % self.voca_size)
+        self.max_len = 100
 
         # remove short and long sentence
         src, tgt = [], []
         for s, t in zip(sources, targets):
-            if 50 <= len(s) < self.max_len and 50 <= len(t) < self.max_len:
+            if 2 <= len(s) < self.max_len and 2 <= len(t) < self.max_len:
                 src.append(s)
                 tgt.append(t)
 
@@ -73,9 +74,10 @@ class CornellDataFeeder(object):
             tgt[i] += [0] * (self.max_len - len(tgt[i]))
 
         # swap source and target : french -> english
-        return tgt, src
+        return src, tgt
 
-    def to_batch(self, sentences):
+    def to_batches(self, sentences):
+        batches = []
 
         # convert to index list and add <EOS> to end of sentence
         for i in range(len(sentences)):
@@ -85,7 +87,20 @@ class CornellDataFeeder(object):
         for i in range(len(sentences)):
             sentences[i] += [0] * (self.max_len - len(sentences[i]))
 
-        return sentences
+        batch = []
+        num_in_batch = 0
+        for sentence in sentences:
+            if len(batch) == self.batch_size:
+                batches.append(batch)
+                batch = []
+            batch.append(sentence)
+
+        if batch:
+            while len(batch) != self.batch_size:
+                batch.append([0]*self.max_len)
+            batches.append(batch)
+
+        return batches
 
     def print_index(self, indices):
         for i, index in enumerate(indices):

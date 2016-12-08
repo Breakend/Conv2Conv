@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import sugartensor as tf
-from data import ComTrans
+from data import CornellDataFeeder
 
 
 __author__ = 'buriburisuri@gmail.com'
@@ -14,8 +14,8 @@ tf.sg_verbosity(10)
 # hyper parameters
 #
 
-batch_size = 16    # batch size
-latent_dim = 892   # hidden layer dimension
+batch_size = 4    # batch size
+latent_dim = 600   # hidden layer dimension
 num_blocks = 3     # dilated blocks
 
 #
@@ -23,7 +23,7 @@ num_blocks = 3     # dilated blocks
 #
 
 # ComTrans parallel corpus input tensor ( with QueueRunner )
-data = ComTrans(batch_size=batch_size)
+data = CornellDataFeeder(batch_size=batch_size)
 
 # source, target sentence
 x, y = data.source, data.target
@@ -102,8 +102,14 @@ for i in range(num_blocks):
 dec = dec.sg_conv1d(size=1, dim=data.voca_size)
 
 # cross entropy loss with logit and mask
-loss = dec.sg_ce(target=y, mask=True)
+loss = tf.reduce_mean(dec.sg_ce(target=y, mask=True))
+
+#import pdb; pdb.set_trace()
+l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if '/b:' not in v.name])
+tf.sg_summary_loss(l2_loss, prefix='l2_loss')
+loss += .00001 * l2_loss
+tf.sg_summary_loss(loss, prefix='total_loss')
 
 # train
-tf.sg_train(log_interval=30, lr=0.0001, loss=loss,
+tf.sg_train(clip_gradients=35., log_interval=30, lr=0.001, loss=loss,
             ep_size=data.num_batch, max_ep=20, early_stop=False)

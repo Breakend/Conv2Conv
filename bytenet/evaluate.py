@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import sugartensor as tf
-import numpy as np
 from data import CornellDataFeeder
 
 
@@ -10,12 +9,13 @@ __author__ = 'buriburisuri@gmail.com'
 # set log level to debug
 tf.sg_verbosity(10)
 
+
 #
 # hyper parameters
 #
 
-batch_size = 4
-latent_dim = 600   # hidden layer dimension
+batch_size = 4    # batch size
+latent_dim = 400   # hidden layer dimension
 num_blocks = 3     # dilated blocks
 
 #
@@ -23,15 +23,18 @@ num_blocks = 3     # dilated blocks
 #
 
 # ComTrans parallel corpus input tensor ( with QueueRunner )
-data = CornellDataFeeder(batch_size=batch_size, load=False)
+data = CornellDataFeeder(batch_size=batch_size)
 
-# place holders
-x = tf.placeholder(dtype=tf.sg_intx, shape=(batch_size, data.max_len))
-y_src = tf.placeholder(dtype=tf.sg_intx, shape=(batch_size, data.max_len))
+# source, target sentence
+x, y = data.source, data.target
+voca_size = data.voca_size
 
 # make embedding matrix for source and target
-emb_x = tf.sg_emb(name='emb_x', voca_size=data.voca_size, dim=latent_dim)
-emb_y = tf.sg_emb(name='emb_y', voca_size=data.voca_size, dim=latent_dim)
+emb_x = tf.sg_emb(name='emb_x', voca_size=voca_size, dim=latent_dim)
+emb_y = tf.sg_emb(name='emb_y', voca_size=voca_size, dim=latent_dim)
+
+# shift target for training source
+y_src = tf.concat(1, [tf.zeros((batch_size, 1), tf.sg_intx), y[:, :-1]])
 
 
 # residual block
@@ -50,6 +53,8 @@ def sg_res_block(tensor, opt):
 
     # 1xk conv dilated
     out = input_.sg_aconv1d(size=opt.size, rate=opt.rate, causal=opt.causal, act='relu', bn=(not opt.causal), ln=opt.causal)
+
+    #TODO: add causal gate here
 
     # dimension recover and residual connection
     out = out.sg_conv1d(size=1, dim=in_dim) + tensor
@@ -94,12 +99,13 @@ for i in range(num_blocks):
            .sg_res_block(size=3, rate=16, causal=True))
 
 # final fully convolution layer for softmax
-label = dec = dec.sg_conv1d(size=1, dim=data.voca_size)
+dec = dec.sg_conv1d(size=1, dim=data.voca_size)
+
+# cross entropy loss with logit and mask
+loss = dec.sg_ce(target=y, mask=True)
 
 # greedy search policy
-
 label = dec.sg_argmax()
-#label = tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32)
 
 
 #
@@ -108,22 +114,11 @@ label = dec.sg_argmax()
 
 # smaple french sentences for source language
 sources = [
-    u"Who are you?",
-    u"What is the meaning of life?",
-    u"How are you?",
-    u"What is your job?",
-    u"What's your name?",
-    u"When were you born?",
-    u"Where are you from?",
-    u"Are you a man or a woman?",
-    u"Why are we here?",
-    u"okay, bye!",
-    u"Did you change your hair?",
-    u"Where did he go? He was just here."
+    u"What is the meaning of life?"
 ]
 
 # to batch form
-batches = data.to_batches(sources)
+sources = data.to_batch(sources)
 
 # run graph for translating
 with tf.Session() as sess:
@@ -134,7 +129,7 @@ with tf.Session() as sess:
     saver = tf.train.Saver()
     saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
 
-    for sources in batches:
+    for i in range(3):
 
         # initialize character sequence
         pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
@@ -143,19 +138,14 @@ with tf.Session() as sess:
         # generate output sequence
         for i in range(data.max_len):
             # predict character
-            #import pdb; pdb.set_trace()
             out = sess.run(label, {x: sources, y_src: pred_prev})
-	    #characters = [np.random.choice(np.arange(139), p=x) for x in out[:,i]]
-            #characters = characters
-            characters = out[:,i]
             # update character sequence
             if i < data.max_len - 1:
-                for j in range(len(characters)):
-                    pred_prev[j, i + 1] = int(characters[j])
-            pred[:, i] = characters[:]
+                pred_prev[:, i + 1] = out[:, i]
+            pred[:, i] = out[:, i]
 
-	# print result
-	print '\nsources : --------------'
-	data.print_index(sources)
-	print '\ntargets : --------------'
-	data.print_index(pred)
+# print result
+print '\nsources : --------------'
+data.print_index(sources)
+print '\ntargets : --------------'
+data.print_index(pred)
