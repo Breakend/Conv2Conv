@@ -126,7 +126,8 @@ sources = [
 # to batch form
 batches = data.to_batches(sources)
 beam_predictions = []
-k_beams = 2
+k_beams = 5
+B = 5
 
 # run graph for translating
 with tf.Session() as sess:
@@ -141,27 +142,28 @@ with tf.Session() as sess:
     for sources in batches:
 
         # initialize character sequence
-        for i in range(k_beams):
-            pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
-            beam_predictions.append((pred_prev, 0))
+        pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
+        beam_predictions.append((pred_prev, 0))
 
         # generate output sequence
         for i in range(data.max_len):
             # predict character
-            new_beam_predictions = []
+            state_set = []
             for beam, value in beam_predictions:
                 values, out = sess.run(label, {x: sources, y_src: beam})
-                
+
                 if i < data.max_len - 1:
-                    num_bms = k_beams if i < 1 else 1
-                    for k in range(num_bms):
+                    for k in range(k_beams):
                         beam_copy = np.copy(beam)
                         beam_copy[:,i+1] = out[:,i,k]
                         beam_value = value + values[:,i,k]
-                        new_beam_predictions.append((beam_copy, beam_value))
-            if len(new_beam_predictions) > 0:
-                beam_predictions = new_beam_predictions
-                
+                        state_set.append((beam_copy, beam_value))
+            beam_predictions = []
+            state_set.sort(key=lambda x:x[1]) 
+            while len(state_set) != 0 and B*batch_size > len(beam_predictions):
+                state = state_set.pop(-1)
+                beam_predictions.append(state)
+            
         
 	    #characters = [np.random.choice(np.arange(139), p=x) for x in out[:,i]]
             #characters = characters

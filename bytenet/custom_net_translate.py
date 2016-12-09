@@ -2,6 +2,7 @@
 import sugartensor as tf
 import numpy as np
 from data2 import CornellDataFeeder
+from tqdm import *
 
 
 __author__ = 'buriburisuri@gmail.com'
@@ -43,7 +44,6 @@ emb_y = tf.sg_emb(name='emb_y', voca_size=voca_size, dim=latent_dim)
 # shift target for training source
 y_src = tf.concat(1, [tf.zeros((batch_size, 1), tf.sg_intx), y[:, :-1]])
 
-
 # residual block
 @tf.sg_sugar_func
 def sg_res_block(tensor, opt):
@@ -59,10 +59,11 @@ def sg_res_block(tensor, opt):
               .sg_conv1d(size=1, dim=in_dim/2, act='relu', bn=(not opt.causal), ln=opt.causal))
 
     # 1xk conv dilated
-    out = input_.sg_aconv1d(size=opt.size, rate=opt.rate, causal=opt.causal, act='relu', bn=(not opt.causal), ln=opt.causal)
+    out = input_.sg_aconv1d(size=opt.size, rate=opt.rate, causal=opt.causal, bn=(not opt.causal), ln=opt.causal)
 
     if opt.conditional is not None:
-        out += opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", act='tanh', bias=False)
+        out += opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
+    out = out.sg_tanh()
 
     #TODO: add causal gate here
 
@@ -73,6 +74,7 @@ def sg_res_block(tensor, opt):
 
 # inject residual multiplicative block
 tf.sg_inject_func(sg_res_block)
+
 
 
 #
@@ -91,11 +93,12 @@ for i in range(num_blocks):
            .sg_res_block(size=5, rate=16))
 
 
-in_dim = enc.get_shape().as_list()[-1]
-enc = enc.sg_conv1d(size=1, in_dim=in_dim, dim=gc_latent_dim)
 
 # concat merge target source
-#enc = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
+dec = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
+
+in_dim = enc.get_shape().as_list()[-1]
+enc = enc.sg_conv1d(size=1, in_dim=in_dim, dim=gc_latent_dim)
 
 
 #
@@ -103,7 +106,6 @@ enc = enc.sg_conv1d(size=1, in_dim=in_dim, dim=gc_latent_dim)
 #
 
 # loop dilated causal conv block
-dec = y_src.sg_lookup(emb=emb_y)
 for i in range(num_blocks):
     dec = (dec
            .sg_res_block(size=3, rate=1, causal=True, conditional=enc)
@@ -113,7 +115,7 @@ for i in range(num_blocks):
            .sg_res_block(size=3, rate=16, causal=True, conditional=enc))
 
 # final fully convolution layer for softmax
-dec = dec.sg_conv1d(size=1, dim=data.voca_size)
+label = dec = dec.sg_conv1d(size=1, dim=data.voca_size)
 
 #import pdb; pdb.set_trace()
 #l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if '/b:' not in v.name])
@@ -122,8 +124,10 @@ dec = dec.sg_conv1d(size=1, dim=data.voca_size)
 #tf.sg_summary_loss(loss, prefix='total_loss')
 
 # train
-label = dec.sg_argmax()
+label = tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32)
 
+k_beams = 10
+label = tf.nn.top_k(label, k=k_beams)
 
 #
 # translate
@@ -150,7 +154,21 @@ sources = [
 ]
 
 # to batch form
-sources = data.to_batch(sources)
+batches = data.to_batches(sources)
+beam_predictions = []
+B = 10 
+
+
+def _match_any(l, arr, i):
+    for a2 in l:
+        sentence_match = True
+        for j in range(a2[0][i].shape[-1]):
+            # stop at EOS char
+            if a2[0][i][j] != arr[0][i][j]:
+                sentence_match = False
+            if a2[0][i][j] == 1. and arr[0][i][j] == 1.:
+                break
+    return False
 
 # run graph for translating
 with tf.Session() as sess:
@@ -161,22 +179,52 @@ with tf.Session() as sess:
     saver = tf.train.Saver()
     saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
 
-    # initialize character sequence
-    pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
-    pred = np.zeros((batch_size, data.max_len)).astype(np.int32)
+    beam_predictions = []
+    for sources in batches:
 
-    # generate output sequence
-    for i in range(data.max_len):
-        # predict character
-        # import pdb; pdb.set_trace()
-        out = sess.run(label, {x: sources, y_src: pred_prev})
-        # update character sequence
-        if i < data.max_len - 1:
-            pred_prev[:, i + 1] = out[:, i]
-        pred[:, i] = out[:, i]
+        # initialize character sequence
+        pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
+        beam_predictions.append((pred_prev, 0)) 
 
-# print result
-print '\nsources : --------------'
-data.print_index(sources)
-print '\ntargets : --------------'
-data.print_index(pred)
+        # generate output sequence
+        for i in tqdm(range(data.max_len)):
+            # predict character
+            state_set = []
+            if i >= data.max_len - 1:
+                break
+            for beam, value in beam_predictions:
+                values, out = sess.run(label, {x: sources, y_src: beam})
+                j = 0
+                for k in range(k_beams):
+                    beam_copy = np.copy(beam)
+                    beam_copy[:,i+1] = out[:,i,k]
+                    beam_value = value + values[:,i,k]
+                    state_set.append((beam_copy, beam_value))
+            beam_predictions = []
+            best_batch_states = {}
+            for batch_num in range(batch_size):
+                best_batch_states[batch_num] = []
+                state_set.sort(key=lambda x:x[1][batch_num]) 
+                j = len(state_set)-1
+                while j >= 0 and B > len(best_batch_states[batch_num]):
+                    state = state_set[j]
+                    if  0 == len(best_batch_states[batch_num]) or not _match_any(best_batch_states[batch_num], state, batch_num):
+                        best_batch_states[batch_num].append(state)
+		    j -= 1
+
+            for batch_num, values in best_batch_states.iteritems():                
+                for k, v in enumerate(values):
+                    if k < len(beam_predictions):
+                        if not _match_any(beam_predictions, v, batch_num): 
+                            beam_predictions[k][0][batch_num] = v[0][batch_num]
+                            beam_predictions[k][1][batch_num] = v[1][batch_num]
+                    else:
+                        beam_predictions.append(v)
+
+        # print result
+        print '\nsources : --------------'
+        data.print_index(sources)
+        print '\ntargets : --------------'
+        for i in range(batch_size):
+            beam_predictions.sort(key=lambda x: x[1][i])
+            data.print_index2(beam_predictions[-1][0][i], i)

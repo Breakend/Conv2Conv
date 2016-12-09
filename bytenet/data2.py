@@ -8,6 +8,7 @@ class CornellDataFeeder(object):
 
         # load train corpus
         sources, targets, cond_srcs, cond_tars = self._load_corpus(mode='train')
+        self.batch_size=batch_size
 
         # to constant tensor
         source = tf.convert_to_tensor(sources)
@@ -96,6 +97,41 @@ class CornellDataFeeder(object):
             sentences[i] += [0] * (self.max_len - len(sentences[i]))
 
         return sentences
+
+    def to_batches(self, sentences):
+        batches = []
+
+        # convert to index list and add <EOS> to end of sentence
+        for i in range(len(sentences)):
+            sentences[i] = [self.byte2index[ord(ch)] for ch in sentences[i]] + [1]
+
+        # zero-padding
+        for i in range(len(sentences)):
+            sentences[i] += [0] * (self.max_len - len(sentences[i]))
+
+        batch = []
+        num_in_batch = 0
+        for sentence in sentences:
+            if len(batch) == self.batch_size:
+                batches.append(batch)
+                batch = []
+            batch.append(sentence)
+
+        if batch:
+            while len(batch) != self.batch_size:
+                batch.append([0]*self.max_len)
+            batches.append(batch)
+
+        return batches
+
+    def print_index2(self, index, i):
+        str_ = ''
+        for ch in index:
+            if ch > 1:
+                str_ += unichr(self.index2byte[ch])
+            elif ch == 1:  # <EOS>
+                break
+        print '[%d]' % i + str_
 
     def print_index(self, indices):
         for i, index in enumerate(indices):

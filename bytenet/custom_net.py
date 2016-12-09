@@ -124,5 +124,5 @@ loss = tf.reduce_mean(dec.sg_ce(target=y, mask=True))
 #tf.sg_summary_loss(loss, prefix='total_loss')
 
 # train
-tf.sg_train(clip_gradients=35., log_interval=30, lr=0.001, loss=loss,
+tf.sg_train(clip_gradients=35., log_interval=30, lr=0.0001, loss=loss,
             ep_size=data.num_batch, max_ep=100, early_stop=False)
