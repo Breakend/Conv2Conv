@@ -1,3 +1,8 @@
 *.pyc
+*.swp
+bytenet/diverse_sentences/
+bytenet/old_custom_checkpoint_relu_tanh_separate/
+bytenet/asset_latent_400_small_model/
+bytenet/asset_latent_800/
 logdir
 data/*

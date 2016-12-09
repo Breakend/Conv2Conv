@@ -33,6 +33,7 @@ class CornellMovieData(dataset.Dataset):
             target = open(os.path.join(data_dir, 'target.txt'), 'w')
 
             line_pairs = []
+            character_id_tuples = []
 
             def strip_punctuation(s):
                 return ''.join(c for c in s if c not in punctuation)
@@ -40,6 +41,7 @@ class CornellMovieData(dataset.Dataset):
             for conversation in conversations:
 
                 # Get the line nums (between [ and ]) and split by commma
+                character_ids = [int(x.strip('u')) for x in conversation.split(' +++$+++ ')[:2]]
                 conv_lines = conversation.split('[')[1].split(']')[0].split(',')
 
                 # Strip quote marks
@@ -50,7 +52,7 @@ class CornellMovieData(dataset.Dataset):
                     if conv_lines[i] in lines_by_number and conv_lines[i + 1] in lines_by_number:
                         source.write(lines_by_number[conv_lines[i]])
                         target.write(lines_by_number[conv_lines[i + 1]])
-                        dialogue_tuples.append((lines_by_number[conv_lines[i]], lines_by_number[conv_lines[i + 1]]))
+                        dialogue_tuples.append((lines_by_number[conv_lines[i]], lines_by_number[conv_lines[i + 1]], character_ids[i%2], character_ids[(i+1)%2]))
                     if conv_lines[i] not in lines_by_number:
                         print("Could not find " + conv_lines[i] + "in movie lines")
                     if conv_lines[i + 1] not in lines_by_number:

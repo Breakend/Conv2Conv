@@ -14,8 +14,8 @@ tf.sg_verbosity(10)
 # hyper parameters
 #
 
-batch_size = 4
-latent_dim = 600   # hidden layer dimension
+batch_size = 8
+latent_dim = 400   # hidden layer dimension
 num_blocks = 3     # dilated blocks
 
 #
@@ -98,8 +98,9 @@ label = dec = dec.sg_conv1d(size=1, dim=data.voca_size)
 
 # greedy search policy
 
-label = dec.sg_argmax()
-#label = tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32)
+label = tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32)
+label = tf.nn.top_k(label, k=5)
+#label = label.sg_argmax()
 
 
 #
@@ -124,6 +125,8 @@ sources = [
 
 # to batch form
 batches = data.to_batches(sources)
+beam_predictions = []
+k_beams = 2
 
 # run graph for translating
 with tf.Session() as sess:
@@ -134,28 +137,46 @@ with tf.Session() as sess:
     saver = tf.train.Saver()
     saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
 
+    beam_predictions = []
     for sources in batches:
 
         # initialize character sequence
-        pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
-        pred = np.zeros((batch_size, data.max_len)).astype(np.int32)
+        for i in range(k_beams):
+            pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
+            beam_predictions.append((pred_prev, 0))
 
         # generate output sequence
         for i in range(data.max_len):
             # predict character
-            #import pdb; pdb.set_trace()
-            out = sess.run(label, {x: sources, y_src: pred_prev})
+            new_beam_predictions = []
+            for beam, value in beam_predictions:
+                values, out = sess.run(label, {x: sources, y_src: beam})
+                
+                if i < data.max_len - 1:
+                    num_bms = k_beams if i < 1 else 1
+                    for k in range(num_bms):
+                        beam_copy = np.copy(beam)
+                        beam_copy[:,i+1] = out[:,i,k]
+                        beam_value = value + values[:,i,k]
+                        new_beam_predictions.append((beam_copy, beam_value))
+            if len(new_beam_predictions) > 0:
+                beam_predictions = new_beam_predictions
+                
+        
 	    #characters = [np.random.choice(np.arange(139), p=x) for x in out[:,i]]
             #characters = characters
-            characters = out[:,i]
+            """characters = out[:,i]
             # update character sequence
             if i < data.max_len - 1:
                 for j in range(len(characters)):
                     pred_prev[j, i + 1] = int(characters[j])
-            pred[:, i] = characters[:]
+            pred[:, i] = characters[:]"""
 
 	# print result
 	print '\nsources : --------------'
 	data.print_index(sources)
 	print '\ntargets : --------------'
-	data.print_index(pred)
+        for beam,value in beam_predictions:
+	    data.print_index(beam)
+            for v in value:
+                print("val: %d" % v)

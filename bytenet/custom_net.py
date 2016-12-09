@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import sugartensor as tf
-from data import CornellDataFeeder
+from data2 import CornellDataFeeder
 
 
 __author__ = 'buriburisuri@gmail.com'
@@ -16,6 +16,7 @@ tf.sg_verbosity(10)
 
 batch_size = 16    # batch size
 latent_dim = 400   # hidden layer dimension
+gc_latent_dim = 400 # dimension of conditional embedding
 num_blocks = 3     # dilated blocks
 
 #
@@ -26,9 +27,14 @@ num_blocks = 3     # dilated blocks
 data = CornellDataFeeder(batch_size=batch_size)
 
 # source, target sentence
-x, y = data.source, data.target
+x, y, conditionals_x, conditionals_y = data.source, data.target, data.src_cond, data.tgt_cond
+
 voca_size = data.voca_size
 
+conditional_size = data.cond_size # this is the number of cardinal conditionals, for example if 377 is the highest speaker id
+
+# TODO: this is for conditioning on speaker also
+emb_conditional = tf.sg_emb(name='emb_cond', voca_size=conditional_size, dim=gc_latent_dim)
 # make embedding matrix for source and target
 emb_x = tf.sg_emb(name='emb_x', voca_size=voca_size, dim=latent_dim)
 emb_y = tf.sg_emb(name='emb_y', voca_size=voca_size, dim=latent_dim)
@@ -52,7 +58,11 @@ def sg_res_block(tensor, opt):
               .sg_conv1d(size=1, dim=in_dim/2, act='relu', bn=(not opt.causal), ln=opt.causal))
 
     # 1xk conv dilated
-    out = input_.sg_aconv1d(size=opt.size, rate=opt.rate, causal=opt.causal, act='relu', bn=(not opt.causal), ln=opt.causal)
+    out = input_.sg_aconv1d(size=opt.size, rate=opt.rate, causal=opt.causal, bn=(not opt.causal), ln=opt.causal)
+
+    if opt.conditional is not None:
+        out += opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
+    out = out.sg_tanh()
 
     #TODO: add causal gate here
 
@@ -80,23 +90,26 @@ for i in range(num_blocks):
            .sg_res_block(size=5, rate=8)
            .sg_res_block(size=5, rate=16))
 
-# concat merge target source
-enc = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
 
+
+# concat merge target source
+dec = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
+
+in_dim = enc.get_shape().as_list()[-1]
+enc = enc.sg_conv1d(size=1, in_dim=in_dim, dim=gc_latent_dim)
 
 #
 # decode graph ( causal convolution )
 #
 
 # loop dilated causal conv block
-dec = enc
 for i in range(num_blocks):
     dec = (dec
-           .sg_res_block(size=3, rate=1, causal=True)
-           .sg_res_block(size=3, rate=2, causal=True)
-           .sg_res_block(size=3, rate=4, causal=True)
-           .sg_res_block(size=3, rate=8, causal=True)
-           .sg_res_block(size=3, rate=16, causal=True))
+           .sg_res_block(size=3, rate=1, causal=True, conditional=enc)
+           .sg_res_block(size=3, rate=2, causal=True, conditional=enc)
+           .sg_res_block(size=3, rate=4, causal=True, conditional=enc)
+           .sg_res_block(size=3, rate=8, causal=True, conditional=enc)
+           .sg_res_block(size=3, rate=16, causal=True, conditional=enc))
 
 # final fully convolution layer for softmax
 dec = dec.sg_conv1d(size=1, dim=data.voca_size)
@@ -112,4 +125,4 @@ loss = tf.reduce_mean(dec.sg_ce(target=y, mask=True))
 
 # train
 tf.sg_train(clip_gradients=35., log_interval=30, lr=0.001, loss=loss,
-            ep_size=data.num_batch, max_ep=20, early_stop=False)
+            ep_size=data.num_batch, max_ep=100, early_stop=False)
