@@ -17,8 +17,8 @@ tf.sg_verbosity(10)
 #
 
 batch_size = 16    # batch size
-latent_dim = 600   # hidden layer dimension
-gc_latent_dim = 600 # dimension of conditional embedding
+latent_dim = 400   # hidden layer dimension
+gc_latent_dim = 400 # dimension of conditional embedding
 num_blocks = 3     # dilated blocks
 
 #
@@ -156,7 +156,7 @@ sources = [
 # to batch form
 batches = data.to_batches(sources)
 beam_predictions = []
-B = 5 
+B = 10 
 
 
 def _match_any(l, arr, i):
@@ -227,4 +227,4 @@ with tf.Session() as sess:
         print '\ntargets : --------------'
         for i in range(batch_size):
             beam_predictions.sort(key=lambda x: x[1][i])
-            print("%s Val: %s" % (data.print_index2(beam_predictions[-1][0][i], i), beam_predictions[-1][1][i]))
+            data.print_index2(beam_predictions[-1][0][i], i)

@@ -15,8 +15,8 @@ tf.sg_verbosity(10)
 #
 
 batch_size = 16    # batch size
-latent_dim = 400   # hidden layer dimension
-gc_latent_dim = 400 # dimension of conditional embedding
+latent_dim = 600   # hidden layer dimension
+gc_latent_dim = 600 # dimension of conditional embedding
 num_blocks = 3     # dilated blocks
 
 #
@@ -118,11 +118,11 @@ dec = dec.sg_conv1d(size=1, dim=data.voca_size)
 loss = tf.reduce_mean(dec.sg_ce(target=y, mask=True))
 
 #import pdb; pdb.set_trace()
-#l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if '/b:' not in v.name])
-#tf.sg_summary_loss(l2_loss, prefix='l2_loss')
-#loss += .00001 * l2_loss
-#tf.sg_summary_loss(loss, prefix='total_loss')
+l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if '/b:' not in v.name])
+tf.sg_summary_loss(l2_loss, prefix='l2_loss')
+loss += .00001 * l2_loss
+tf.sg_summary_loss(loss, prefix='total_loss')
 
 # train
-tf.sg_train(clip_gradients=35., log_interval=30, lr=0.0001, loss=loss,
+tf.sg_train(clip_gradients=35., log_interval=30, lr=0.00005, loss=loss,
             ep_size=data.num_batch, max_ep=100, early_stop=False)

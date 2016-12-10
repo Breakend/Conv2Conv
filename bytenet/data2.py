@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import sugartensor as tf
 import numpy as np
+from cornell_movie_dialogue import CornellMovieData
 
 class CornellDataFeeder(object):
 
@@ -16,6 +17,7 @@ class CornellDataFeeder(object):
         cond_src = tf.convert_to_tensor(cond_srcs)
         cond_tars = tf.convert_to_tensor(cond_tars)
 
+        import pdb; pdb.set_trace()
         # create queue from constant tensor
         source, target, cond_src, cond_tars = tf.train.slice_input_producer([source, target, cond_src, cond_tars])
 
@@ -33,23 +35,20 @@ class CornellDataFeeder(object):
         # print info
         tf.sg_info('Train data loaded.(total data=%d, total batch=%d)' % (len(sources), self.num_batch))
 
-    def _load_corpus(self, mode='train'):
+    def _make_vocab(self):
+        # use the whole corpus to make a vocabulary
 
-        # load en-fr parallel corpus
-        from cornell_movie_dialogue import CornellMovieData
         CornellMovieData.maybe_download_and_extract()
         line_pairs = CornellMovieData.get_line_pairs()
-
         # make character-level parallel corpus
-        all_byte, sources, targets, source_chars, target_chars = [], [], [], [], []
+
+        all_byte = []
         max_char = 0
         for query, reply, char_1, char_2 in line_pairs:
             src = [ord(ch) for ch in query if ch != '\n']  # source language byte stream
             tgt = [ord(ch) for ch in reply if ch != '\n']  # target language byte stream
-            sources.append(src)
-            targets.append(tgt)
-            source_chars.append(char_1)
-            target_chars.append(char_2)
+            char_1 = int(char_1)
+            char_2 = int(char_2)
             if char_1 > max_char:
                 max_char = char_1
             if char_2 > max_char:
@@ -65,6 +64,32 @@ class CornellDataFeeder(object):
         self.voca_size = len(self.index2byte)
         self.max_len = 50
         self.min_len = 2
+
+    def _load_corpus(self, mode='train'):
+        self._make_vocab()
+
+        if mode == 'train':
+             line_pairs = CornellMovieData.get_preprepared_line_pairs('processed_sources_conv2conv.txt', 'processed_targets_conv2conv.txt')
+        else:
+            raise Exception("Not yet implemented for other")
+
+        # make character-level parallel corpus
+        all_byte, sources, targets, source_chars, target_chars = [], [], [], [], []
+        max_char = 0
+        for query, reply, char_1, char_2 in line_pairs:
+            src = [ord(ch) for ch in query if ch != '\n']  # source language byte stream
+            tgt = [ord(ch) for ch in reply if ch != '\n']  # target language byte stream
+            char_1 = int(char_1)
+            char_2 = int(char_2)
+            sources.append(src)
+            targets.append(tgt)
+            source_chars.append(char_1)
+            target_chars.append(char_2)
+            if char_1 > max_char:
+                max_char = char_1
+            if char_2 > max_char:
+                max_char = char_2
+            all_byte.extend(src + tgt)
 
         # remove short and long sentence
         src, tgt = [], []

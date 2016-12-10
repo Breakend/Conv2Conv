@@ -4,5 +4,9 @@ bytenet/diverse_sentences/
 bytenet/old_custom_checkpoint_relu_tanh_separate/
 bytenet/asset_latent_400_small_model/
 bytenet/asset_latent_800/
+
+bytenet/asset_overtrained_245k/
+bytenet/checkpoint_at_60k_for_600/
+
 logdir
 data/*
