@@ -17,7 +17,7 @@ class CornellDataFeeder(object):
         cond_src = tf.convert_to_tensor(cond_srcs)
         cond_tars = tf.convert_to_tensor(cond_tars)
 
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
         # create queue from constant tensor
         source, target, cond_src, cond_tars = tf.train.slice_input_producer([source, target, cond_src, cond_tars])
 
@@ -127,8 +127,9 @@ class CornellDataFeeder(object):
         batches = []
 
         # convert to index list and add <EOS> to end of sentence
+        import pdb; pdb.set_trace()
         for i in range(len(sentences)):
-            sentences[i] = [self.byte2index[ord(ch)] for ch in sentences[i]] + [1]
+            sentences[i] = [self.byte2index[ord(ch)] for ch in sentences[i] if ch != '\n'] + [1]
 
         # zero-padding
         for i in range(len(sentences)):
@@ -149,14 +150,17 @@ class CornellDataFeeder(object):
 
         return batches
 
-    def print_index2(self, index, i):
+    def print_index2(self, index, i=None):
         str_ = ''
         for ch in index:
             if ch > 1:
                 str_ += unichr(self.index2byte[ch])
             elif ch == 1:  # <EOS>
                 break
-        print '[%d]' % i + str_
+        if i:
+            return '[%d]' % i + str_
+        else:
+            return str_
 
     def print_index(self, indices):
         for i, index in enumerate(indices):

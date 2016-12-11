@@ -2,6 +2,7 @@
 import sugartensor as tf
 import numpy as np
 from data2 import CornellDataFeeder
+from cornell_movie_dialogue import CornellMovieData
 from tqdm import *
 
 
@@ -124,7 +125,7 @@ label = dec = dec.sg_conv1d(size=1, dim=data.voca_size)
 #tf.sg_summary_loss(loss, prefix='total_loss')
 
 # train
-label = tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32)
+label = tf.log(tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32))
 
 k_beams = 10
 label = tf.nn.top_k(label, k=k_beams)
@@ -134,7 +135,7 @@ label = tf.nn.top_k(label, k=k_beams)
 #
 
 # smaple french sentences for source language
-sources = [
+orig_sources = [
     u"Can we make this quick?",
     u"Hey, how are you doing?",
     u"What's up?",
@@ -153,8 +154,16 @@ sources = [
     u"What?"
 ]
 
+
+line_pairs = CornellMovieData.get_preprepared_line_pairs('processed_sources_conv2conv.txt', 'processed_targets_val_conv2conv.txt')
+
+orig_sources = [q[0] for q in line_pairs]
+
+print("Found %d source lines" % len(orig_sources))
+
+
 # to batch form
-batches = data.to_batches(sources)
+batches = data.to_batches(orig_sources)
 beam_predictions = []
 B = 5 
 
@@ -169,6 +178,8 @@ def _match_any(l, arr, i):
             if a2[0][i][j] == 1. and arr[0][i][j] == 1.:
                 break
     return False
+
+predictions = []
 
 # run graph for translating
 with tf.Session() as sess:
@@ -228,3 +239,8 @@ with tf.Session() as sess:
         for i in range(batch_size):
             beam_predictions.sort(key=lambda x: x[1][i])
             print("%s Val: %s" % (data.print_index2(beam_predictions[-1][0][i], i), beam_predictions[-1][1][i]))
+            predictions.append(data.print_index2(beam_predictions[-1][0][i]))
+
+with open('predictions.txt', 'w') as output_file:
+    for prediction in predictions:
+        output_file.write("%s\n" % prediction)

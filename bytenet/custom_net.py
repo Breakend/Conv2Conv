@@ -124,5 +124,5 @@ loss += .00001 * l2_loss
 tf.sg_summary_loss(loss, prefix='total_loss')
 
 # train
-tf.sg_train(clip_gradients=35., log_interval=30, lr=0.00005, loss=loss,
+tf.sg_train(clip_gradients=35., log_interval=30, lr=0.00001, loss=loss,
             ep_size=data.num_batch, max_ep=100, early_stop=False)
