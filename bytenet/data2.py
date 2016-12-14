@@ -69,7 +69,8 @@ class CornellDataFeeder(object):
         self._make_vocab()
 
         if mode == 'train':
-             line_pairs = CornellMovieData.get_preprepared_line_pairs('processed_sources_conv2conv.txt', 'processed_targets_conv2conv.txt')
+             line_pairs = CornellMovieData.get_line_pairs()
+             #line_pairs = CornellMovieData.get_preprepared_line_pairs('processed_sources_conv2conv.txt', 'processed_targets_conv2conv.txt')
         else:
             raise Exception("Not yet implemented for other")
 
@@ -127,7 +128,6 @@ class CornellDataFeeder(object):
         batches = []
 
         # convert to index list and add <EOS> to end of sentence
-        import pdb; pdb.set_trace()
         for i in range(len(sentences)):
             sentences[i] = [self.byte2index[ord(ch)] for ch in sentences[i] if ch != '\n'] + [1]
 

@@ -18,6 +18,9 @@ def write_to_files_with_indices(line_pairs, source_file, target_file, indices, F
         if len(source) >= 50 or len(target) >= 50:
             continue
 
+        if len(source) <= 1 and len(target) <= 1:
+            continue
+
         if FORMAT_FOR_HARVARD_SEQ2SEQ: 
             source = nltk.word_tokenize(source)
             target = nltk.word_tokenize(target) 

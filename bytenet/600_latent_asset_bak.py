@@ -15,11 +15,9 @@ tf.sg_verbosity(10)
 #
 
 batch_size = 16    # batch size
-latent_dim = 500   # hidden layer dimension
-gc_latent_dim = 500 # dimension of conditional embedding
+latent_dim = 600   # hidden layer dimension
+gc_latent_dim = 600 # dimension of conditional embedding
 num_blocks = 3     # dilated blocks
-use_conditional_gate = False
-use_l2_norm = False
 
 #
 # inputs
@@ -63,11 +61,10 @@ def sg_res_block(tensor, opt):
     out = input_.sg_aconv1d(size=opt.size, rate=opt.rate, causal=opt.causal, bn=(not opt.causal), ln=opt.causal)
 
     if opt.conditional is not None:
-        out1 = out + opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
-        out2 = out + opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False) 
-        out = out1.sg_tanh() * out2.sg_sigmoid()
-    else:
-        out = out.sg_relu()
+        out += opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
+    out = out.sg_tanh()
+
+    #TODO: add causal gate here
 
     # dimension recover and residual connection
     out = out.sg_conv1d(size=1, dim=in_dim) + tensor
@@ -94,15 +91,12 @@ for i in range(num_blocks):
            .sg_res_block(size=5, rate=16))
 
 
+
 # concat merge target source
 dec = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
-#dec = y_src.sg_lookup(emb=emb_y)
 
-if use_conditional_gate:
-    in_dim = enc.get_shape().as_list()[-1]
-    enc = enc.sg_conv1d(size=1, in_dim=in_dim, dim=gc_latent_dim, act='relu')
-else:
-    enc = None
+in_dim = enc.get_shape().as_list()[-1]
+enc = enc.sg_conv1d(size=1, in_dim=in_dim, dim=gc_latent_dim)
 
 #
 # decode graph ( causal convolution )
@@ -121,14 +115,14 @@ for i in range(num_blocks):
 dec = dec.sg_conv1d(size=1, dim=data.voca_size)
 
 # cross entropy loss with logit and mask
-loss = dec.sg_ce(target=y, mask=True)
+loss = tf.reduce_mean(dec.sg_ce(target=y, mask=True))
 
-if use_l2_norm:
-    l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if '/b:' not in v.name])
-    tf.sg_summary_loss(l2_loss, prefix='l2_loss')
-    loss += .00001 * l2_loss
-    tf.sg_summary_loss(loss, prefix='total_loss')
+#import pdb; pdb.set_trace()
+#l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if '/b:' not in v.name])
+#tf.sg_summary_loss(l2_loss, prefix='l2_loss')
+#loss += .00001 * l2_loss
+#tf.sg_summary_loss(loss, prefix='total_loss')
 
 # train
-tf.sg_train(clip_gradients=35., log_interval=30, lr=0.00005, loss=loss,
-            ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True)
+tf.sg_train(clip_gradients=35., log_interval=30, lr=0.0001, loss=loss,
+            ep_size=data.num_batch, max_ep=100, early_stop=False)
