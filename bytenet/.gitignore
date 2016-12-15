@@ -1,4 +1,6 @@
 asset/
+baseline_with_gates/
+bytenet_baseline_160k_weird/
 asset_latent_100/
 data/
 asset_160k_600model_l2_reg/

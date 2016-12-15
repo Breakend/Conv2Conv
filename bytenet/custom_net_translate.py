@@ -22,7 +22,8 @@ latent_dim = 500   # hidden layer dimension
 gc_latent_dim = 500 # dimension of conditional embedding
 num_blocks = 3     # dilated blocks
 use_beam_search=False
-use_conditional=False
+use_conditional=True
+concat_vector=False
 eval_set = 'questionaire'
 
 #
@@ -99,8 +100,10 @@ for i in range(num_blocks):
 
 
 # concat merge target source
-dec = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
-#dec = y_src.sg_lookup(emb=emb_y)
+if concat_vector:
+    dec = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
+else:
+    dec = y_src.sg_lookup(emb=emb_y)
 
 
 if use_conditional:

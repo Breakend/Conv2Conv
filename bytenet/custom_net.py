@@ -18,8 +18,9 @@ batch_size = 16    # batch size
 latent_dim = 500   # hidden layer dimension
 gc_latent_dim = 500 # dimension of conditional embedding
 num_blocks = 3     # dilated blocks
-use_conditional_gate = False
+use_conditional_gate = True 
 use_l2_norm = False
+concat_embedding = False
 
 #
 # inputs
@@ -95,8 +96,10 @@ for i in range(num_blocks):
 
 
 # concat merge target source
-dec = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
-#dec = y_src.sg_lookup(emb=emb_y)
+if concat_embedding:
+    dec = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
+else:
+    dec = y_src.sg_lookup(emb=emb_y)
 
 if use_conditional_gate:
     in_dim = enc.get_shape().as_list()[-1]
