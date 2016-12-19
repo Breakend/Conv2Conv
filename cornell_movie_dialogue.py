@@ -1,4 +1,5 @@
 '''Reads the Cornell movie dialog dataset and creates training and test datasets
+Note this was modified from: https://github.com/pralexa/SimpleBot/blob/master/cornell_movie_dialog.py
 '''
 
 import numpy as np
@@ -25,13 +26,13 @@ class CornellMovieData(dataset.Dataset):
             source_lines = sources.readlines()
             source_characters = [x.split(' +++$+++ ')[0] for x in source_lines]
             source_lines = [x.split(' +++$+++ ')[1] for x in source_lines]
-            
+
         with open(os.path.join(data_dir, target_path), 'r') as targets:
             target_lines = targets.readlines()
             target_characters = [x.split(' +++$+++ ')[0] for x in target_lines]
             target_lines = [x.split(' +++$+++ ')[1] for x in target_lines]
-        return zip(source_lines, target_lines, source_characters, target_characters) 
-         
+        return zip(source_lines, target_lines, source_characters, target_characters)
+
 
     @staticmethod
     def get_line_pairs(data_dir=DEFAULT_DATA_DIR):
@@ -103,40 +104,3 @@ class CornellMovieData(dataset.Dataset):
                 full_file = os.path.join(dest_directory, 'cornell movie-dialogs corpus', f)
                 print("Moving " + f + " to " + dest_directory)
                 shutil.move(full_file, dest_directory)
-
-    @staticmethod
-    def prepare_data(vocabulary_size, data_dir=DEFAULT_DATA_DIR, tokenizer=None):
-      """Get cornell data into data_dir, create vocabularies and tokenize data.
-      Args:
-        vocabulary_size: size of the English vocabulary to create and use.
-        data_dir: where to store or look for the data
-        tokenizer: a function to use to tokenize each data sentence;
-          if None, basic_tokenizer will be used.
-      Returns:
-        A tuple of 6 elements:
-          (1) path to the token-ids for source training data-set,
-          (2) path to the token-ids for target training data-set,
-          (3) path to the source vocabulary file,
-          (4) path to the target vocabulary file
-      """
-      # Get data to the specified directory.
-      CornellMovieData.maybe_download_and_extract(data_dir)
-
-      # Parse into sentence pairs
-      CornellMovieData.get_line_pairs(data_dir)
-
-      # Create vocabularies of the appropriate sizes.
-      source_vocab_path = os.path.join(data_dir, "vocab%d.source" % vocabulary_size)
-      target_vocab_path = os.path.join(data_dir, "vocab%d.target" % vocabulary_size)
-      data_utils.create_vocabulary(source_vocab_path, os.path.join(data_dir, 'source.txt'), vocabulary_size, tokenizer)
-      data_utils.create_vocabulary(target_vocab_path, os.path.join(data_dir, 'target.txt'), vocabulary_size, tokenizer)
-
-
-      # Create token ids for the training data.
-      source_train_ids_path = os.path.join(data_dir, ("ids%d.source" % vocabulary_size))
-      target_train_ids_path = os.path.join(data_dir, ("ids%d.target" % vocabulary_size))
-      data_utils.data_to_token_ids(os.path.join(data_dir, 'source.txt'), source_train_ids_path, source_vocab_path, tokenizer)
-      data_utils.data_to_token_ids(os.path.join(data_dir, 'target.txt'), target_train_ids_path, target_vocab_path, tokenizer)
-
-      return (source_train_ids_path, target_train_ids_path,
-              source_vocab_path, target_vocab_path)
