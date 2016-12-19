@@ -1,0 +1,117 @@
+ByteNet Model Questionaire responses
+Sources : --------------
+[0]Hello!
+[1]How are you?
+[2]What's your name?
+[3]When were you born?
+[4]What year were you born?
+[5]Where are you from?
+[6]Are you a man or a woman?
+[7]See you later.
+[8]Why are we here?
+[9]Okay, bye!
+[10]My name is David. What is my name?
+[11]My name is John. What is my name?
+[12]Are you a leader or a follower?
+[13]Are you a follower or a leader?
+[14]Is sky blue or black?
+[15]Does a cat have a tail?
+
+targets : --------------
+Hello. Val: -21.6465
+[1]What do you mean? Val: -26.5239
+[2]You know what I mean. Val: -17.0333
+[3]What do you mean? Val: -31.5168
+[4]What do you mean? Val: -23.7156
+[5]I don't know. Val: -13.9824
+[6]Yes. Val: -19.6134
+[7]Yeah. Val: -22.7903
+[8]Because I don't want to see you. Val: -17.2513
+[9]What do you mean? Val: -24.2527
+[10]What? Val: -34.4922
+[11]What? Val: -33.7445
+[12]Yes. Val: -26.8785
+[13]No. Val: -17.8604
+[14]Yes. Val: -25.4691
+[15]What do you mean? Val: -35.4737
+
+sources : --------------
+[0]Does a cat have a wing?
+[1]Can a cat fly?
+[2]How many legs does a cat have?
+[3]How many legs does a spider have?
+[4]How many legs does a centipede have?
+[5]What is the color of the sky?
+[6]What is the purpose of life?
+[7]What is the purpose of living?
+[8]What is the purpose of existence?
+[9]Where are you now?
+[10]What is the purpose of dying?
+[11]What is the purpose of being intelligent?
+[12]What is the purpose of emotions?
+[13]What is moral?
+[14]What is immoral?
+[15]What is morality?
+
+targets : --------------
+What do you think? Val: -16.8741
+[1]Sure. Val: -23.2798
+[2]I don't know. Val: -22.8167
+[3]Well, I don't know.  I lost you. Val: -21.5441
+[4]I don't know. Val: -23.1845
+[5]The money. Val: -22.768
+[6]The money. Val: -37.6887
+[7]The money. Val: -29.784
+[8]I don't know. Val: -21.087
+[9]You're not going to do a lot of good to see you. Val: -24.2312
+[10]I don't know. Val: -19.5505
+[11]I don't know. Val: -26.5436
+[12]I don't know. Val: -23.2306
+[13]I don't know. Val: -16.2482
+[14]I don't know. Val: -24.0784
+[15]I don't know. Val: -24.5908
+
+sources : --------------
+[0]What do you think about tesla?
+[1]What do you think about bill gates?
+[2]What do you think about England?
+[3]What is your job?
+[4]What do you do?
+[5]The sky is quite blue.
+[6]The grass is very green.
+[7]Aunt Jamima would disapprove.
+[8]It's cold outside.
+[9]That was really tasty.
+[10]Eureka!
+[11]I've discovered something awesome.
+[12]I'm thirsty.
+[13]I'm hungry.
+[14]I feel sad.
+[15]I feel happy.
+
+targets : --------------
+I don't know. Val: -13.6771
+[1]What do you mean? Val: -31.4228
+[2]What do you mean? Val: -23.9948
+[3]What do you mean? Val: -27.9379
+[4]You know what I'm talking about. Val: -17.7265
+[5]What? Val: -49.8981
+[6]What? Val: -30.5321
+[7]What do you mean, you don't know? Val: -25.663
+[8]What? Val: -36.6115
+[9]What do you mean? Val: -24.0267
+[10]What? Val: -46.7479
+[11]What? Val: -41.9185
+[12]You're a big body of the way you're a factle. Val: -37.8073
+[13]You're a little one thing you'd be good at the -- Val: -28.6044
+[14]You're not going to do this one. Val: -24.8149
+[15]You're a big boy. Val: -37.233
+
+sources : --------------
+[0]They're not nice people.
+[1]They're nice people.
+
+targets : --------------
+What do you think? Val: -16.5148
+[1]What do you mean? Val: -22.2635
+[2]What do you think? Val: -20.8667

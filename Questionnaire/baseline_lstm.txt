@@ -1,0 +1,149 @@
+SENT 1: Hello!
+PRED 1: What ?
+
+SENT 2: How are you?
+PRED 2: Good .
+
+SENT 3: What’s your name?
+PRED 3: What ?
+
+SENT 4: When were you born?
+PRED 4: Tomorrow .
+
+SENT 5: What year were you born?
+PRED 5: What ?
+
+SENT 6: Where are you from?
+PRED 6: Home .
+
+SENT 7: Are you a man or a woman?
+PRED 7: No .
+
+SENT 8: See you later.
+PRED 8: Yes .
+
+SENT 9: Why are we here?
+PRED 9: Why not ?
+
+SENT 10: Okay, bye!
+PRED 10: What is it ?
+
+SENT 11: My name is David. What is my name?
+PRED 11: Who is it ?
+
+SENT 12: My name is John. What is my name?
+PRED 12: Who is it ?
+
+SENT 13: Are you a leader or a follower?
+PRED 13: No .
+
+SENT 14: Are you a follower or a leader?
+PRED 14: No .
+
+SENT 15: Is sky blue or black?
+PRED 15: Gone .
+
+SENT 16: Does a cat have a tail?
+PRED 16: A what ?
+
+SENT 17: Does a cat have a wing?
+PRED 17: A what ?
+
+SENT 18: Can a cat fly?
+PRED 18: How can you do that ?
+
+SENT 19: How many legs does a cat have?
+PRED 19: I do n't know .
+
+SENT 20: How many legs does a spider have?
+PRED 20: I do n't know .
+
+SENT 21: How many legs does a centipede have?
+PRED 21: I do n't know .
+
+SENT 22: What is the color of the sky?
+PRED 22: I do n't know .
+
+SENT 23: What is the purpose of life?
+PRED 23: I do n't know .
+
+SENT 24: What is the purpose of living?
+PRED 24: I do n't know .
+
+SENT 25: What is the purpose of existence?
+PRED 25: I do n't know .
+
+SENT 26: Where are you now?
+PRED 26: Home .
+
+SENT 27: What is the purpose of dying?
+PRED 27: I do n't know .
+
+SENT 28: What is the purpose of being intelligent?
+PRED 28: Why ?
+
+SENT 29: What is the purpose of emotions?
+PRED 29: I do n't know .
+
+SENT 30: What is moral?
+PRED 30: I do n't know .
+
+SENT 31: What is immoral?
+PRED 31: I do n't know .
+
+SENT 32: What is morality?
+PRED 32: I do n't know .
+
+SENT 33: What do you think about tesla?
+PRED 33: What do you mean ?
+
+SENT 34: What do you think about bill gates?
+PRED 34: I do n't know .
+
+SENT 35: What do you think about England during the reign of Elizabeth?
+PRED 35: What ?
+
+SENT 36: What is your job?
+PRED 36: I want to talk to you .
+
+SENT 37: What do you do?
+PRED 37: What ?
+
+SENT 38: The sky is quite blue.
+PRED 38: Yes .
+
+SENT 39: The grass is very green.
+PRED 39: Yes .
+
+SENT 40: Aunt Jamima would disapprove.
+PRED 40: What do you mean ?
+
+SENT 41: It's cold outside.
+PRED 41: Yes .
+
+SENT 42: That was really tasty.
+PRED 42: What ?
+
+SENT 43: Eureka!
+PRED 43: What ?
+
+SENT 44: I've discovered something awesome.
+PRED 44: Good.
+
+SENT 45: I'm thirsty.
+PRED 45: What ?
+
+SENT 46: I'm hungry.
+PRED 46: What ?
+
+SENT 47: I feel sad.
+PRED 47: What is it ?
+
+SENT 48: I feel happy.
+PRED 48: What is it ?
+
+SENT 49: They're not nice people.
+PRED 49: Who is it ?
+
+SENT 50: They're nice people.
+PRED 50: Who is it ?

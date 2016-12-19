@@ -1,0 +1,118 @@
+custom with gates questionaire results
+
+sources : --------------
+[0]Hello!
+[1]How are you?
+[2]What's your name?
+[3]When were you born?
+[4]What year were you born?
+[5]Where are you from?
+[6]Are you a man or a woman?
+[7]See you later.
+[8]Why are we here?
+[9]Okay, bye!
+[10]My name is David. What is my name?
+[11]My name is John. What is my name?
+[12]Are you a leader or a follower?
+[13]Are you a follower or a leader?
+[14]Is sky blue or black?
+[15]Does a cat have a tail?
+
+targets : --------------
+[0] Hello.
+[1] I'm sorry.
+[2] I don't know.  I just said the others wear.
+[3] I'm doing a tea bet.
+[4] I don't know.
+[5] I'm looking for a private island.
+[6] Yes. I told you
+[7] Yeah, actually, I don't know.
+[8] Because it's the balls.
+[9] What's the matter with you?
+[10] I'm sorry. They were ... Yours in the pick-
+[11] I'm sorry.
+[12] Yes.
+[13] Yes.
+[14] No, it's all right.
+[15] No, no doctor.
+
+sources : --------------
+[0]Does a cat have a wing?
+[1]Can a cat fly?
+[2]How many legs does a cat have?
+[3]How many legs does a spider have?
+[4]How many legs does a centipede have?
+[5]What is the color of the sky?
+[6]What is the purpose of life?
+[7]What is the purpose of living?
+[8]What is the purpose of existence?
+[9]Where are you now?
+[10]What is the purpose of dying?
+[11]What is the purpose of being intelligent?
+[12]What is the purpose of emotions?
+[13]What is moral?
+[14]What is immoral?
+[15]What is morality?
+
+targets : --------------
+[0] Sure.
+[1] Sure.
+[2] Twenty-five.
+[3] Twenty.
+[4] Twenty-five.
+[5] I don't know you.
+[6] I don't know.
+[7] I don't know.
+[8] I don't know.
+[9] I'm going out!
+[10] I don't know.
+[11] You tell me tomorrow.
+[12] What does that mean?
+[13] What does it look like?
+[14] The money is better.
+[15] Nothing, it was along.
+
+sources : --------------
+[0]What do you think about tesla?
+[1]What do you think about bill gates?
+[2]What do you think about England?
+[3]What is your job?
+[4]What do you do?
+[5]The sky is quite blue.
+[6]The grass is very green.
+[7]Aunt Jamima would disapprove.
+[8]It's cold outside.
+[9]That was really tasty.
+[10]Eureka!
+[11]I've discovered something awesome.
+[12]I'm thirsty.
+[13]I'm hungry.
+[14]I feel sad.
+[15]I feel happy.
+
+targets : --------------
+[0] I don't know.
+[1] I don't know.
+[2] I don't know.
+[3] I don't know.
+[4] I don't know.
+[5] I don't want to talk about it.
+[6] What?
+[7] I'm sorry about home.
+[8] I know who you are.
+[9] I was beautiful bed more to prove a life.
+[10] What's wrong?
+[11] I was beautiful.
+[12] You can handle it.
+[13] You don't know how was you?
+[14] You come on in.
+[15] You can't do that.
+
+sources : --------------
+[0]They're not nice people.
+[1]They're nice people.
+
+
+targets : --------------
+[0] Who's they?
+[1] What?

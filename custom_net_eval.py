@@ -5,10 +5,6 @@ from data2 import CornellDataFeeder
 from cornell_movie_dialogue import CornellMovieData
 from tqdm import *
 
-
-__author__ = 'buriburisuri@gmail.com'
-
-
 # set log level to debug
 tf.sg_verbosity(10)
 
@@ -20,7 +16,11 @@ tf.sg_verbosity(10)
 batch_size = 16    # batch size
 latent_dim = 500   # hidden layer dimension
 gc_latent_dim = 500 # dimension of conditional embedding
-num_blocks = 2     # dilated blocks
+num_blocks = 3     # dilated blocks
+use_beam_search=False
+use_conditional=True
+concat_vector=False
+eval_set = 'questionaire'
 
 #
 # inputs
@@ -64,16 +64,12 @@ def sg_res_block(tensor, opt):
 
     if opt.conditional is not None:
         out1 = out + opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
-        out2 = out + opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False) 
-        out = out1.sg_tanh() + out2.sg_sigmoid()
+        out2 = out + opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
+        out = out1.sg_tanh() * out2.sg_sigmoid()
     else:
         out = out.sg_relu()
-
-
-    #TODO: add causal gate here
-
-    # dimension recover and residual connection
     out = out.sg_conv1d(size=1, dim=in_dim) + tensor
+
 
     return out
 
@@ -100,11 +96,17 @@ for i in range(num_blocks):
 
 
 # concat merge target source
-#dec = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
-dec = target=y_src.sg_lookup(emb=emb_y)
+if concat_vector:
+    dec = enc.sg_concat(target=y_src.sg_lookup(emb=emb_y))
+else:
+    dec = y_src.sg_lookup(emb=emb_y)
 
-in_dim = enc.get_shape().as_list()[-1]
-enc = enc.sg_conv1d(size=1, in_dim=in_dim, dim=gc_latent_dim, act='relu')
+
+if use_conditional:
+    in_dim = enc.get_shape().as_list()[-1]
+    enc = enc.sg_conv1d(size=1, in_dim=in_dim, dim=gc_latent_dim, act='relu')
+else:
+    enc = None
 
 
 #
@@ -123,17 +125,15 @@ for i in range(num_blocks):
 # final fully convolution layer for softmax
 label = dec = dec.sg_conv1d(size=1, dim=data.voca_size)
 
-#import pdb; pdb.set_trace()
-#l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if '/b:' not in v.name])
-#tf.sg_summary_loss(l2_loss, prefix='l2_loss')
-#loss += .00001 * l2_loss
-#tf.sg_summary_loss(loss, prefix='total_loss')
-
 # train
 label = tf.log(tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32))
 
+
 k_beams = 5
-label = tf.nn.top_k(label, k=k_beams)
+if use_beam_search:
+    label = tf.nn.top_k(label, k=k_beams)
+else:
+    label = label.sg_argmax()
 
 #
 # translate
@@ -175,7 +175,7 @@ u"What is immoral?",
 u"What is morality?",
 u"What do you think about tesla?",
 u"What do you think about bill gates?",
-u"What do you think about England during the reign of Elizabeth?",
+u"What do you think about England?",
 u"What is your job?",
 u"What do you do?",
 u"The sky is quite blue.",
@@ -194,18 +194,20 @@ u"They're nice people."
 ]
 
 
-line_pairs = CornellMovieData.get_preprepared_line_pairs('processed_sources_conv2conv.txt', 'processed_targets_val_conv2conv.txt')
-
-#orig_sources = [q[0] for q in line_pairs]
+if eval_set == 'validation':
+    line_pairs = CornellMovieData.get_preprepared_line_pairs('processed_sources_val_conv2conv.txt', 'processed_targets_val_conv2conv.txt')
+    orig_sources = [q[0] for q in line_pairs]
+elif eval_set == 'test':
+    line_pairs = CornellMovieData.get_preprepared_line_pairs('processed_sources_test_conv2conv.txt', 'processed_targets_test_conv2conv.txt')
+    orig_sources = [q[0] for q in line_pairs]
 
 print("Found %d source lines" % len(orig_sources))
 
 
 # to batch form
-import pdb; pdb.set_trace()
 batches = data.to_batches(orig_sources)
 beam_predictions = []
-B = 6 
+B = 5
 
 def _sent_length(sent_array):
     count = 0
@@ -230,67 +232,95 @@ def _match_any(l, arr, i):
 
 predictions = []
 
-# run graph for translating
-with tf.Session() as sess:
-    # init session vars
-    tf.sg_init(sess)
+if use_beam_search:
+    # run graph for translating
+    with tf.Session() as sess:
+        # init session vars
+        tf.sg_init(sess)
 
-    # restore parameters
-    saver = tf.train.Saver()
-    saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
+        # restore parameters
+        saver = tf.train.Saver()
+        saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
 
-    beam_predictions = []
-    for sources in batches:
+        beam_predictions = []
+        for sources in batches:
+            # initialize character sequence
+            pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
+            beam_predictions.append((pred_prev, 0))
 
-        # initialize character sequence
-        pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
-        beam_predictions.append((pred_prev, 0)) 
+            # generate output sequence
+            for i in tqdm(range(data.max_len)):
+                # predict character
+                state_set = []
+                if i >= data.max_len - 1:
+                    break
+                for beam, value in beam_predictions:
+                    values, out = sess.run(label, {x: sources, y_src: beam})
+                    j = 0
+                    for k in range(k_beams):
+                       beam_copy = np.copy(beam)
+                       beam_copy[:,i+1] = out[:,i,k]
+                       beam_value = value + values[:,i,k]
+                       state_set.append((beam_copy, beam_value))
+                    beam_predictions = []
+                    best_batch_states = {}
+                    for batch_num in range(batch_size):
+                        best_batch_states[batch_num] = []
+                        state_set.sort(key=lambda x:float(x[1][batch_num]))#/float(_sent_length(x[0][batch_num])))
+                        j = len(state_set)-1
+                        while j >= 0 and B > len(best_batch_states[batch_num]):
+                            state = state_set[j]
+                            if  0 == len(best_batch_states[batch_num]) or not _match_any(best_batch_states[batch_num], state, batch_num):
+                                best_batch_states[batch_num].append(state)
+                            j -= 1
 
-        # generate output sequence
-        for i in tqdm(range(data.max_len)):
-            # predict character
-            state_set = []
-            if i >= data.max_len - 1:
-                break
-            for beam, value in beam_predictions:
-                values, out = sess.run(label, {x: sources, y_src: beam})
-                j = 0
-                for k in range(k_beams):
-                    beam_copy = np.copy(beam)
-                    beam_copy[:,i+1] = out[:,i,k]
-                    beam_value = value + values[:,i,k]
-                    state_set.append((beam_copy, beam_value))
-            beam_predictions = []
-            best_batch_states = {}
-            for batch_num in range(batch_size):
-                best_batch_states[batch_num] = []
-                state_set.sort(key=lambda x:float(x[1][batch_num]))#/float(_sent_length(x[0][batch_num]))) 
-                j = len(state_set)-1
-                while j >= 0 and B > len(best_batch_states[batch_num]):
-                    state = state_set[j]
-                    if  0 == len(best_batch_states[batch_num]) or not _match_any(best_batch_states[batch_num], state, batch_num):
-                        best_batch_states[batch_num].append(state)
-		    j -= 1
+                        for batch_num, values in best_batch_states.iteritems():
+                            for k, v in enumerate(values):
+                                if k < len(beam_predictions):
+                                    if not _match_any(beam_predictions, v, batch_num):
+                                        beam_predictions[k][0][batch_num] = v[0][batch_num]
+                                        beam_predictions[k][1][batch_num] = v[1][batch_num]
+                                else:
+                                    beam_predictions.append(v)
 
-            for batch_num, values in best_batch_states.iteritems():                
-                for k, v in enumerate(values):
-                    if k < len(beam_predictions):
-                        if not _match_any(beam_predictions, v, batch_num): 
-                            beam_predictions[k][0][batch_num] = v[0][batch_num]
-                            beam_predictions[k][1][batch_num] = v[1][batch_num]
-                    else:
-                        beam_predictions.append(v)
+            # print result
+            print '\nsources : --------------'
+            data.print_index(sources)
+            print '\ntargets : --------------'
+            for i in range(batch_size):
+                beam_predictions.sort(key=lambda x:float(x[1][i]))#/float(np.count_nonzero(x[0][i])))
+                print("%s Val: %s" % (data.print_index2(beam_predictions[-1][0][i], i), beam_predictions[-1][1][i]))
+                predictions.append(data.print_index2(beam_predictions[-1][0][i]))
+else:
+    with tf.Session() as sess:
+        # init session vars
+        tf.sg_init(sess)
 
-        # print result
-        print '\nsources : --------------'
-        data.print_index(sources)
-        print '\ntargets : --------------'
-        for i in range(batch_size):
-            beam_predictions.sort(key=lambda x: x[1][i])
+        # restore parameters
+        saver = tf.train.Saver()
+        saver.restore(sess, tf.train.latest_checkpoint('asset/train/ckpt'))
 
-            beam_predictions.sort(key=lambda x:float(x[1][i]))#/float(np.count_nonzero(x[0][i]))) 
-            print("%s Val: %s" % (data.print_index2(beam_predictions[-1][0][i], i), beam_predictions[-1][1][i] / float(_sent_length(beam_predictions[-1][0][i]))))
-            predictions.append(data.print_index2(beam_predictions[-1][0][i]))
+        for sources in batches:
+            # initialize character sequence
+            pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
+            pred = np.zeros((batch_size, data.max_len)).astype(np.int32)
+            # generate output sequence
+            for i in range(data.max_len):
+                # predict character
+                out = sess.run(label, {x: sources, y_src: pred_prev})
+                # update character sequence
+                if i < data.max_len - 1:
+                    pred_prev[:, i + 1] = out[:, i]
+                pred[:, i] = out[:, i]
+
+            # print result
+            print '\nsources : --------------'
+            data.print_index(sources)
+            print '\ntargets : --------------'
+            for i in range(batch_size):
+                prediction = data.print_index2(pred[i])
+                print("[%d] %s" %(i, prediction))
+                predictions.append(prediction)
 
 with open('predictions.txt', 'w') as output_file:
     for prediction in predictions:

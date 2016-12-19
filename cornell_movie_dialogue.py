@@ -19,6 +19,21 @@ DATA_URL = "http://www.mpi-sws.org/~cristian/data/cornell_movie_dialogs_corpus.z
 class CornellMovieData(dataset.Dataset):
 
     @staticmethod
+    def get_preprepared_line_pairs(source_path, target_path, data_dir=DEFAULT_DATA_DIR):
+        source_lines, target_lines = [], []
+        with open(os.path.join(data_dir, source_path), 'r') as sources:
+            source_lines = sources.readlines()
+            source_characters = [x.split(' +++$+++ ')[0] for x in source_lines]
+            source_lines = [x.split(' +++$+++ ')[1] for x in source_lines]
+            
+        with open(os.path.join(data_dir, target_path), 'r') as targets:
+            target_lines = targets.readlines()
+            target_characters = [x.split(' +++$+++ ')[0] for x in target_lines]
+            target_lines = [x.split(' +++$+++ ')[1] for x in target_lines]
+        return zip(source_lines, target_lines, source_characters, target_characters) 
+         
+
+    @staticmethod
     def get_line_pairs(data_dir=DEFAULT_DATA_DIR):
         lines_by_number = {}
         with open(os.path.join(data_dir, 'movie_lines.txt')) as lines:
