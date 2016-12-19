@@ -1,8 +1,8 @@
-# TODO: write script to download harvard-seq2seq and all commands to generate this
-# TODO: maybe add questionnaire results?
+To train the custom model, first run:
 
+$ python preprocess_for_seq2seq.py # to Download and preprocess (tokenize) the data
 
-To train the custom model, simply run:
+Then simply run:
 
 python custom_net.py
 

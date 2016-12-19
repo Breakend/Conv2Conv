@@ -29,7 +29,7 @@ targets : --------------
 [7] Yeah, actually, I don't know.
 [8] Because it's the balls.
 [9] What's the matter with you?
-[10] I'm sorry. They were ... Yours in the pick-
+[10] I'm sorry. They were ... Yours-
 [11] I'm sorry.
 [12] Yes.
 [13] Yes.
@@ -99,7 +99,7 @@ targets : --------------
 [5] I don't want to talk about it.
 [6] What?
 [7] I'm sorry about home.
-[8] I know who you are.
+[8] I know you are.
 [9] I was beautiful bed more to prove a life.
 [10] What's wrong?
 [11] I was beautiful.
