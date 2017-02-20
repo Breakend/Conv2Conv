@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
+import argparse
 import sugartensor as tf
-from data2 import CornellDataFeeder
+from twitter_data import TwitterDataFeeder
 
 # Note: modified from https://github.com/buriburisuri/ByteNet
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("corpus")
+parser.add_argument("datapath")
+args = parser.parse_args()
 
 # set log level to debug
 tf.sg_verbosity(10)
@@ -25,7 +32,10 @@ concat_embedding = False
 #
 
 # ComTrans parallel corpus input tensor ( with QueueRunner )
-data = CornellDataFeeder(batch_size=batch_size)
+if args.corpus == "twitter":
+    data = TwitterDataFeeder(batch_size=batch_size, path = args.datapath)
+else:
+    raise Exception("That corpus isn't permitted.")
 
 # source, target sentence
 x, y, conditionals_x, conditionals_y = data.source, data.target, data.src_cond, data.tgt_cond

@@ -12,4 +12,4 @@ asset_small_model2/
 asset_weirdly_overtrained/
 assetbak2/
 baselie_bytenet/
-
+*.pyc
