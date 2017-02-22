@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import sugartensor as tf
 import numpy as np
+import threading
 from cornell_movie_dialogue import CornellMovieData
 
 
@@ -15,38 +16,75 @@ def get_twitter_line_pairs(path):
                 dialogue_tuples.append((conv_lines[i], conv_lines[i+1], 1, 2))
     return dialogue_tuples
 
+
+
 class TwitterDataFeeder(object):
 
-    def __init__(self, batch_size=16, path='data/twitter_train.txt'):
+    def __init__(self, sess, batch_size=16, path='data/twitter_train.txt'):
 
         # load train corpus
         self.corpus_text_path = path
         sources, targets, cond_srcs, cond_tars = self._load_corpus()
         self.batch_size=batch_size
 
-        # to constant tensor
-        source = tf.convert_to_tensor(sources)
-        target = tf.convert_to_tensor(targets)
-        cond_src = tf.convert_to_tensor(cond_srcs)
-        cond_tars = tf.convert_to_tensor(cond_tars)
+        self.sess = sess
+        queue_input_data = tf.placeholder(tf.int32, shape=[20, self.max_len])
+        queue_input_target = tf.placeholder(tf.int32, shape=[20, self.max_len])
 
-        #import pdb; pdb.set_trace()
-        # create queue from constant tensor
-        source, target, cond_src, cond_tars = tf.train.slice_input_producer([source, target, cond_src, cond_tars])
+        queue = tf.FIFOQueue(capacity=50, dtypes=[tf.int32, tf.int32], shapes=[[self.max_len], [self.max_len]])
 
-        # create batch queue
-        batch_queue = tf.train.shuffle_batch([source, target, cond_src, cond_tars], batch_size,
-                                             num_threads=32, capacity=batch_size*64,
-                                             min_after_dequeue=batch_size*32, name='train')
+        enqueue_op = queue.enqueue_many([queue_input_data, queue_input_target])
+        dequeue_op = queue.dequeue()
+
+        # tensorflow recommendation:
+        # capacity = min_after_dequeue + (num_threads + a small safety margin) * batch_size
+        data_batch, target_batch = tf.train.batch(dequeue_op, batch_size=batch_size, capacity=40)
+        # use this to shuffle batches:
+        # data_batch, target_batch = tf.train.shuffle_batch(dequeue_op, batch_size=15, capacity=40, min_after_dequeue=5)
+        def enqueue(sess, raw_data, raw_target):
+            """ Iterates over our data puts small junks into our queue."""
+            raw_data = np.array(raw_data)
+            raw_target = np.array(raw_target)
+            under = 0
+            max = len(raw_data)
+            while True:
+              print("starting to write into queue")
+              upper = under + 20
+              print("try to enqueue ", under, " to ", upper)
+              if upper <= max:
+                  curr_data = raw_data[under:upper]
+                  curr_target = raw_target[under:upper]
+                  under = upper
+              else:
+                  rest = upper - max
+                  print(raw_data[under:max].shape)
+                  print(raw_data[0:rest].shape)
+                  curr_data = np.concatenate((raw_data[under:max], raw_data[0:rest]))
+                  curr_target = np.concatenate((raw_target[under:max], raw_target[0:rest]))
+                  under = rest
+              sess.run(enqueue_op, feed_dict={queue_input_data: curr_data, queue_input_target: curr_target})
+              print("added to the queue")
+            print("finished enqueueing")
+
+
+        self.enqueue_thread = threading.Thread(target=enqueue, args=[sess, sources, targets])
 
         # split data
-        self.source, self.target, self.src_cond, self.tgt_cond = batch_queue
+        self.source, self.target, self.src_cond, self.tgt_cond = data_batch, target_batch, None, None
+        self.queue = queue
 
         # calc total batch count
         self.num_batch = len(sources) // batch_size
 
         # print info
         tf.sg_info('Train data loaded.(total data=%d, total batch=%d)' % (len(sources), self.num_batch))
+
+    def launch_data_threads(self):
+        self.enqueue_thread.isDaemon()
+        self.enqueue_thread.start()
+
+        self.coord = tf.train.Coordinator()
+        self.threads = tf.train.start_queue_runners(coord=self.coord, sess=self.sess)
 
     def _make_vocab(self, line_pairs):
         # use the whole corpus to make a vocabulary
@@ -156,6 +194,12 @@ class TwitterDataFeeder(object):
             batches.append(batch)
 
         return batches
+
+    def cleanup_tensorflow_stuff():
+        sess.run(self.queue.close(cancel_pending_enqueues=True))
+        self.coord.request_stop()
+        self.coord.join(threads)
+        self.sess.close()
 
     def print_index2(self, index, i=None):
         str_ = ''

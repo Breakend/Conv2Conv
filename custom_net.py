@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import argparse
 import sugartensor as tf
-from twitter_data import TwitterDataFeeder
+from twitter_data_large import TwitterDataFeeder
 
 # Note: modified from https://github.com/buriburisuri/ByteNet
 
@@ -19,33 +19,37 @@ tf.sg_verbosity(10)
 # hyper parameters
 #
 
-batch_size = 16    # batch size
-latent_dim = 500   # hidden layer dimension
-gc_latent_dim = 500 # dimension of conditional embedding
-num_blocks = 3     # dilated blocks
-use_conditional_gate = True
+batch_size = 8    # batch size
+latent_dim = 400   # hidden layer dimension
+gc_latent_dim = 400 # dimension of conditional embedding
+num_blocks = 2     # dilated blocks
+use_conditional_gate = False 
 use_l2_norm = False
-concat_embedding = False
+concat_embedding = True
 
 #
 # inputs
 #
 
+sess = tf.Session(config=tf.ConfigProto(
+    intra_op_parallelism_threads=4))
+
 # ComTrans parallel corpus input tensor ( with QueueRunner )
 if args.corpus == "twitter":
-    data = TwitterDataFeeder(batch_size=batch_size, path = args.datapath)
+    data = TwitterDataFeeder(batch_size=batch_size, path = args.datapath, sess = sess)
 else:
     raise Exception("That corpus isn't permitted.")
 
 # source, target sentence
 x, y, conditionals_x, conditionals_y = data.source, data.target, data.src_cond, data.tgt_cond
 
+
 voca_size = data.voca_size
 
-conditional_size = data.cond_size # this is the number of cardinal conditionals, for example if 377 is the highest speaker id
+#conditional_size = data.cond_size # this is the number of cardinal conditionals, for example if 377 is the highest speaker id
 
 # TODO: this is for conditioning on speaker also
-emb_conditional = tf.sg_emb(name='emb_cond', voca_size=conditional_size, dim=gc_latent_dim)
+#emb_conditional = tf.sg_emb(name='emb_cond', voca_size=conditional_size, dim=gc_latent_dim)
 # make embedding matrix for source and target
 emb_x = tf.sg_emb(name='emb_x', voca_size=voca_size, dim=latent_dim)
 emb_y = tf.sg_emb(name='emb_y', voca_size=voca_size, dim=latent_dim)
@@ -141,5 +145,14 @@ if use_l2_norm:
     tf.sg_summary_loss(loss, prefix='total_loss')
 
 # train
-tf.sg_train(clip_gradients=35., log_interval=30, lr=0.00005, loss=loss,
+data.launch_data_threads()
+
+
+optim = tf.sg_optimize.MaxPropOptimizer(learning_rate=0.00005)
+
+tf.sg_init(sess)
+
+tf.sg_train(sess=sess, optim=optim, log_interval=30, lr=0.00005, loss=loss,
             ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True)
+
+data.cleanup_tensorflow_stuff()
