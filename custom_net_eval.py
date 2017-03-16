@@ -27,7 +27,7 @@ eval_set = 'questionaire'
 #
 
 # ComTrans parallel corpus input tensor ( with QueueRunner )
-data = CornellDataFeeder(batch_size=batch_size)
+data = TwitterDataFeeder(batch_size=batch_size, path = args.datapath)
 
 # source, target sentence
 x, y, conditionals_x, conditionals_y = data.source, data.target, data.src_cond, data.tgt_cond

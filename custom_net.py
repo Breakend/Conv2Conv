@@ -51,8 +51,7 @@ emb_x = tf.sg_emb(name='emb_x', voca_size=voca_size, dim=latent_dim)
 emb_y = tf.sg_emb(name='emb_y', voca_size=voca_size, dim=latent_dim)
 
 # shift target for training source
-y_src = tf.concat(1, [tf.zeros((batch_size, 1), tf.sg_intx), y[:, :-1]])
-
+y_src = tf.concat(axis=1, values=[tf.zeros((batch_size, 1), tf.sg_intx), y[:, :-1]])
 
 # residual block
 @tf.sg_sugar_func
