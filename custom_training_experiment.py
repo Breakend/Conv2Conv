@@ -2,6 +2,7 @@
 import argparse
 import sugartensor as tf
 from twitter_data import TwitterDataFeeder
+from helper_ops import *
 
 # Note: modified from https://github.com/buriburisuri/ByteNet
 
@@ -9,9 +10,8 @@ from twitter_data import TwitterDataFeeder
 parser = argparse.ArgumentParser()
 parser.add_argument("corpus")
 parser.add_argument("datapath")
-parser.add_argument("num_steps", default=10000)
-parser.add_argument("learning_rate", default=.0001)
-parser.add_argument("momentum", default=.9)
+parser.add_argument("--num_steps", default=10000)
+parser.add_argument("--learning_rate", default=.0001)
 # parser.add_argument("valid")
 args = parser.parse_args()
 
@@ -35,12 +35,15 @@ use_mutual_information = False
 #
 # inputs
 #
+sess = tf.Session(config=tf.ConfigProto(
+    intra_op_parallelism_threads=4))
 
 # ComTrans parallel corpus input tensor ( with QueueRunner )
 if args.corpus == "twitter":
-    data = TwitterDataFeeder(batch_size=batch_size, path = args.datapath)
+    data = TwitterDataFeeder(batch_size=batch_size, path = args.datapath, sess = sess)
 else:
     raise Exception("That corpus isn't permitted.")
+
 
 # source, target sentence
 x, y, conditionals_x, conditionals_y = data.source, data.target, data.src_cond, data.tgt_cond
@@ -151,10 +154,13 @@ if use_l2_norm:
 # TODO: properly split validation batch, for now just grab the first batch
 # print_validation = tf.sg_print(dec)
 
-optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate, momentum=args.momentum)
-gvs = optimizer.compute_gradients(cost)
-capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvs]
-train_op = optimizer.apply_gradients(capped_gvs)
+optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
+# gvs = optimizer.compute_gradients(loss)
+# capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvs]
+
+
+
+train_op = tf.sg_optim(sess=sess, optim=optimizer)
 
 # trainable = tf.trainable_variables()
 # optim = optimizer.minimize(loss, var_list=trainable)
@@ -170,69 +176,18 @@ sess = tf.Session(config=tf.ConfigProto(log_device_placement=False))
 init = tf.global_variables_initializer()
 sess.run(init)
 
-# Saver for storing checkpoints of the model.
-saver = tf.train.Saver(var_list=tf.trainable_variables(), max_to_keep=5)
+# train
+data.launch_data_threads()
 
+optim = tf.sg_optimize.AdamOptimizer(learning_rate=0.00005)
+
+tf.sg_init(sess)
 try:
-    saved_global_step = load(saver, sess, restore_from)
-    if is_overwritten_training or saved_global_step is None:
-        # The first training step will be saved_global_step + 1,
-        # therefore we put -1 here for new or overwritten trainings.
-        saved_global_step = -1
-
-except:
-    print("Something went wrong while restoring checkpoint. "
-          "We will terminate training to avoid accidentally overwriting "
-          "the previous model.")
-    raise
-
-threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-reader.start_threads(sess)
-
-step = None
-last_saved_step = saved_global_step
-# TODO: validation
-try:
-    for step in range(saved_global_step + 1, args.num_steps):
-        start_time = time.time()
-        if args.store_metadata and step % 50 == 0:
-            # Slow run that stores extra information for debugging.
-            print('Storing metadata')
-            run_options = tf.RunOptions(
-                trace_level=tf.RunOptions.FULL_TRACE)
-            summary, loss_value, _ = sess.run(
-                [summaries, loss, optim],
-                options=run_options,
-                run_metadata=run_metadata)
-            writer.add_summary(summary, step)
-            writer.add_run_metadata(run_metadata,
-                                    'step_{:04d}'.format(step))
-            tl = timeline.Timeline(run_metadata.step_stats)
-            timeline_path = os.path.join(logdir, 'timeline.trace')
-            with open(timeline_path, 'w') as f:
-                f.write(tl.generate_chrome_trace_format(show_memory=True))
-        else:
-            summary, loss_value, _ = sess.run([summaries, loss, optim])
-            writer.add_summary(summary, step)
-
-        duration = time.time() - start_time
-        print('step {:d} - loss = {:.3f}, ({:.3f} sec/step)'
-              .format(step, loss_value, duration))
-
-        if step % args.checkpoint_every == 0:
-            save(saver, sess, logdir, step)
-            last_saved_step = step
-
+    custom_train(sess=sess, optim=optim, log_interval=30, lr=0.00005, loss=loss,
+                ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True)
 except KeyboardInterrupt:
     # Introduce a line break after ^C is displayed so save message
     # is on its own line.
     print()
 finally:
-    if step > last_saved_step:
-        save(saver, sess, logdir, step)
-    coord.request_stop()
-    coord.join(threads)
-
-# train
-# tf.sg_train(clip_gradients=35., log_interval=30, lr=0.00005, loss=loss,
-            # ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True)
+    data.cleanup_tensorflow_stuff()
