@@ -1,10 +1,15 @@
 
-import tqdm
+from tqdm import tqdm
 import sugartensor as tf
+from functools import wraps
+import time
+import numpy as np
 
-def validation_op(label, sess, orig_sources):
+
+def validation_op(label, sess, batches):
+    """batches : sentence batches to be used for validation"""
     # to batch form
-    batches = data.to_batches(orig_sources)
+    # batches = data.to_batches(orig_sources)
     beam_predictions = []
     B = 5
 
@@ -29,8 +34,11 @@ def validation_op(label, sess, orig_sources):
                     break
         return False
 
+    loss = label.sg_ce(target=y, mask=True)
+
     predictions = []
     # TODO: this op should run validation on the network like in custom_net_eval with sample outputs if a flag is set
+    losses = []
     for sources in batches:
         # initialize character sequence
         pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
@@ -38,7 +46,8 @@ def validation_op(label, sess, orig_sources):
         # generate output sequence
         for i in range(data.max_len):
             # predict character
-            out = sess.run(label, {x: sources, y_src: pred_prev})
+            out,loss = sess.run([label, loss], {x: sources, y_src: pred_prev})
+            losses.append(loss)
             # update character sequence
             if i < data.max_len - 1:
                 pred_prev[:, i + 1] = out[:, i]
@@ -53,12 +62,11 @@ def validation_op(label, sess, orig_sources):
             print("[%d] %s" %(i, prediction))
             predictions.append(prediction)
 
-
     with open('predictions.txt', 'w') as output_file:
-    for prediction in predictions:
-        output_file.write("%s\n" % prediction)
+        for prediction in predictions:
+            output_file.write("%s\n" % prediction)
 
-
+    return np.mean(losses), predictions
 
 def custom_train(**kwargs):
     r"""Trains the model.
@@ -92,7 +100,7 @@ def custom_train(**kwargs):
     opt += tf.sg_opt(optim='MaxProp', lr=0.001, beta1=0.9, beta2=0.99, category='', ep_size=100000)
 
     # get optimizer
-    train_op = sg_optim(opt.loss, optim=opt.optim, lr=0.001,
+    train_op = tf.sg_optim(opt.loss, optim=opt.optim, lr=0.001,
                         beta1=opt.beta1, beta2=opt.beta2, category=opt.category)
 
     # for console logging
@@ -104,9 +112,9 @@ def custom_train(**kwargs):
 
     # define train function
     # noinspection PyUnusedLocal
-    @sg_train_func
+    @custom_train_func
     def train_func(sess, arg):
-        return sess.run([loss_, train_op])[0]
+         return sess.run([loss_, train_op])[0]
 
     # run train function
     train_func(**opt)
@@ -203,6 +211,7 @@ def custom_train_func(func):
                     # update epoch info
                     start_step = sess.run(tf.sg_global_step()) % opt.ep_size
                     epoch = ep
+                    # import pdb; pdb.set_trace()
 
                     # create progressbar iterator
                     if opt.tqdm:
@@ -233,6 +242,15 @@ def custom_train_func(func):
 
                     # log epoch information
                     console_log(sess)
+
+                    # start validation
+                    # TODO: this could be cleaner
+                    if opt.validation_batches and opt.validation_predictor:
+                        # validations_labels is the output tensor that you can feed the validation batches into
+                        val_loss, predictions = validation_op(sess=sess, label=opt.validation_predictor, batches=opt.validation_batches)
+                        print("Average Validation Loss: %d" + val_loss)
+                        print("Lastest validation_samples in predictions.txt")
+                        # print predictions
 
                 # save last version
                 saver.save(sess, opt.save_dir + '/model.ckpt', global_step=sess.run(tf.sg_global_step()))

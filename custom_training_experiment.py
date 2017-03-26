@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import argparse
-import sugartensor as tf
-from twitter_data import TwitterDataFeeder
 from helper_ops import *
+import sugartensor as tf
+from twitter_data_large import TwitterDataFeeder
 
 # Note: modified from https://github.com/buriburisuri/ByteNet
 
@@ -10,9 +10,6 @@ from helper_ops import *
 parser = argparse.ArgumentParser()
 parser.add_argument("corpus")
 parser.add_argument("datapath")
-parser.add_argument("--num_steps", default=10000)
-parser.add_argument("--learning_rate", default=.0001)
-# parser.add_argument("valid")
 args = parser.parse_args()
 
 # set log level to debug
@@ -23,18 +20,18 @@ tf.sg_verbosity(10)
 # hyper parameters
 #
 
-batch_size = 16    # batch size
-latent_dim = 500   # hidden layer dimension
-gc_latent_dim = 500 # dimension of conditional embedding
-num_blocks = 3     # dilated blocks
+batch_size = 8    # batch size
+latent_dim = 400   # hidden layer dimension
+gc_latent_dim = 400 # dimension of conditional embedding
+num_blocks = 2     # dilated blocks
 use_conditional_gate = False
 use_l2_norm = False
 concat_embedding = True
-use_mutual_information = False
 
 #
 # inputs
 #
+
 sess = tf.Session(config=tf.ConfigProto(
     intra_op_parallelism_threads=4))
 
@@ -44,23 +41,22 @@ if args.corpus == "twitter":
 else:
     raise Exception("That corpus isn't permitted.")
 
-
 # source, target sentence
 x, y, conditionals_x, conditionals_y = data.source, data.target, data.src_cond, data.tgt_cond
 
+
 voca_size = data.voca_size
 
-conditional_size = data.cond_size # this is the number of cardinal conditionals, for example if 377 is the highest speaker id
+#conditional_size = data.cond_size # this is the number of cardinal conditionals, for example if 377 is the highest speaker id
 
 # TODO: this is for conditioning on speaker also
-emb_conditional = tf.sg_emb(name='emb_cond', voca_size=conditional_size, dim=gc_latent_dim)
+#emb_conditional = tf.sg_emb(name='emb_cond', voca_size=conditional_size, dim=gc_latent_dim)
 # make embedding matrix for source and target
 emb_x = tf.sg_emb(name='emb_x', voca_size=voca_size, dim=latent_dim)
 emb_y = tf.sg_emb(name='emb_y', voca_size=voca_size, dim=latent_dim)
 
 # shift target for training source
 y_src = tf.concat(axis=1, values=[tf.zeros((batch_size, 1), tf.sg_intx), y[:, :-1]])
-
 
 # residual block
 @tf.sg_sugar_func
@@ -142,52 +138,20 @@ dec = dec.sg_conv1d(size=1, dim=data.voca_size)
 # cross entropy loss with logit and mask
 loss = dec.sg_ce(target=y, mask=True)
 
-# if use_mutual_information:
-#    TODO: get GAN stuff and take enc and dec through the terms and then try to classify them
-
 if use_l2_norm:
     l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if '/b:' not in v.name])
     tf.sg_summary_loss(l2_loss, prefix='l2_loss')
     loss += .00001 * l2_loss
     tf.sg_summary_loss(loss, prefix='total_loss')
 
-# TODO: properly split validation batch, for now just grab the first batch
-# print_validation = tf.sg_print(dec)
-
-optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
-# gvs = optimizer.compute_gradients(loss)
-# capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvs]
-
-
-
-train_op = tf.sg_optim(sess=sess, optim=optimizer)
-
-# trainable = tf.trainable_variables()
-# optim = optimizer.minimize(loss, var_list=trainable)
-
-# Set up logging for TensorBoard.
-writer = tf.summary.FileWriter('./assets')
-writer.add_graph(tf.get_default_graph())
-run_metadata = tf.RunMetadata()
-summaries = tf.summary.merge_all()
-
-# Set up session
-sess = tf.Session(config=tf.ConfigProto(log_device_placement=False))
-init = tf.global_variables_initializer()
-sess.run(init)
-
 # train
 data.launch_data_threads()
 
-optim = tf.sg_optimize.AdamOptimizer(learning_rate=0.00005)
+optim = tf.sg_optimize.MaxPropOptimizer(learning_rate=0.00005)
 
 tf.sg_init(sess)
-try:
-    custom_train(sess=sess, optim=optim, log_interval=30, lr=0.00005, loss=loss,
-                ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True)
-except KeyboardInterrupt:
-    # Introduce a line break after ^C is displayed so save message
-    # is on its own line.
-    print()
-finally:
-    data.cleanup_tensorflow_stuff()
+
+custom_train(sess=sess, optim=optim, log_interval=30, lr=0.00005, loss=loss,
+            ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True)
+
+data.cleanup_tensorflow_stuff()

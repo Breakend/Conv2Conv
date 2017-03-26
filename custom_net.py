@@ -23,7 +23,7 @@ batch_size = 8    # batch size
 latent_dim = 400   # hidden layer dimension
 gc_latent_dim = 400 # dimension of conditional embedding
 num_blocks = 2     # dilated blocks
-use_conditional_gate = False 
+use_conditional_gate = False
 use_l2_norm = False
 concat_embedding = True
 
@@ -145,7 +145,6 @@ if use_l2_norm:
 
 # train
 data.launch_data_threads()
-
 
 optim = tf.sg_optimize.MaxPropOptimizer(learning_rate=0.00005)
 

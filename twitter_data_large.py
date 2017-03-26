@@ -189,8 +189,8 @@ class TwitterDataFeeder(object):
 
         return batches
 
-    def cleanup_tensorflow_stuff(self):
-        self.sess.run(self.queue.close(cancel_pending_enqueues=True))
+    def cleanup_tensorflow_stuff():
+        sess.run(self.queue.close(cancel_pending_enqueues=True))
         self.coord.request_stop()
         self.coord.join(threads)
         self.sess.close()
