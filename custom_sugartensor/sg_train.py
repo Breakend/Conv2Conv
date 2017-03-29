@@ -367,6 +367,10 @@ def sg_train_func(func):
                             if len(opt.eval_metric) > 0:
                                 sess.run(opt.eval_metric)
 
+                            if opt.validation_op:
+                                #TODO: make this more generic
+                                validation_op(opt.val_label, sess, opt.val_batches)
+
                             if opt.console_log:   # console logging
                                 # log epoch information
                                 tf.sg_info('\tEpoch[%03d:lr=%7.5f:gs=%d] - loss = %s' %

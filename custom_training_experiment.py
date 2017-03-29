@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import argparse
 import custom_sugartensor as tf
+import helper_ops
 from twitter_data_large import TwitterDataFeeder
 
 # Note: modified from https://github.com/buriburisuri/ByteNet
@@ -150,7 +151,61 @@ optim = tf.sg_optimize.MaxPropOptimizer(learning_rate=0.00005)
 
 tf.sg_init(sess)
 
+orig_sources = [
+u"Hello!",
+u"How are you?",
+u"What's your name?",
+u"When were you born?",
+u"What year were you born?",
+u"Where are you from?",
+u"Are you a man or a woman?",
+u"See you later.",
+u"Why are we here?",
+u"Okay, bye!",
+u"My name is David. What is my name?",
+u"My name is John. What is my name?",
+u"Are you a leader or a follower?",
+u"Are you a follower or a leader?",
+u"Is sky blue or black?",
+u"Does a cat have a tail?",
+u"Does a cat have a wing?",
+u"Can a cat fly?",
+u"How many legs does a cat have?",
+u"How many legs does a spider have?",
+u"How many legs does a centipede have?",
+u"What is the color of the sky?",
+u"What is the purpose of life?",
+u"What is the purpose of living?",
+u"What is the purpose of existence?",
+u"Where are you now?",
+u"What is the purpose of dying?",
+u"What is the purpose of being intelligent?",
+u"What is the purpose of emotions?",
+u"What is moral?",
+u"What is immoral?",
+u"What is morality?",
+u"What do you think about tesla?",
+u"What do you think about bill gates?",
+u"What do you think about England?",
+u"What is your job?",
+u"What do you do?",
+u"The sky is quite blue.",
+u"The grass is very green.",
+u"Aunt Jamima would disapprove.",
+u"It's cold outside.",
+u"That was really tasty.",
+u"Eureka!",
+u"I've discovered something awesome.",
+u"I'm thirsty.",
+u"I'm hungry.",
+u"I feel sad.",
+u"I feel happy.",
+u"They're not nice people.",
+u"They're nice people."
+]
+
 tf.sg_train(sess=sess, optim=optim, log_interval=30, lr=0.00005, loss=loss,
-            ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True)
+            ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True,
+            validation_op = helper_ops.validation_op, val_label=dec, val_batches=data.to_batches([x.lower() for x in orig_sources]))
 
 data.cleanup_tensorflow_stuff()
