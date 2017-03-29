@@ -38,21 +38,23 @@ def validation_op(label, loss, sess, batches):
     label = tf.log(tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32))
     label = label.sg_argmax()
 
+    batch_size = len(batches[0])
+    max_len = len(batches[0][0])
 
     predictions = []
     # TODO: this op should run validation on the network like in custom_net_eval with sample outputs if a flag is set
     losses = []
     for sources in batches:
         # initialize character sequence
-        pred_prev = np.zeros((batch_size, data.max_len)).astype(np.int32)
-        pred = np.zeros((batch_size, data.max_len)).astype(np.int32)
+        pred_prev = np.zeros((batch_size, max_len)).astype(np.int32)
+        pred = np.zeros((batch_size, max_len)).astype(np.int32)
         # generate output sequence
-        for i in range(data.max_len):
+        for i in range(max_len):
             # predict character
             out,loss = sess.run([label, loss], {x: sources, y_src: pred_prev})
             losses.append(loss)
             # update character sequence
-            if i < data.max_len - 1:
+            if i < max_len - 1:
                 pred_prev[:, i + 1] = out[:, i]
             pred[:, i] = out[:, i]
 
