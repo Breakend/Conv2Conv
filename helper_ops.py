@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 
-def validation_op(label, loss, sess, batches):
+def validation_op(label, loss, sess, batches, x, y_src):
     """batches : sentence batches to be used for validation"""
     # to batch form
     # batches = data.to_batches(orig_sources)
