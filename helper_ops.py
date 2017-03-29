@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 
-def validation_op(label, sess, batches):
+def validation_op(label, loss, sess, batches):
     """batches : sentence batches to be used for validation"""
     # to batch form
     # batches = data.to_batches(orig_sources)
@@ -35,7 +35,6 @@ def validation_op(label, sess, batches):
                     break
         return False
 
-    loss = label.sg_ce(target=y, mask=True)
     label = tf.log(tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32))
     label = label.sg_argmax()
 

@@ -369,7 +369,7 @@ def sg_train_func(func):
 
                             if opt.validation_op:
                                 #TODO: make this more generic
-                                validation_op(opt.val_label, sess, opt.val_batches)
+                                validation_op(opt.val_label, loss, sess, opt.val_batches)
 
                             if opt.console_log:   # console logging
                                 # log epoch information
