@@ -1,14 +1,11 @@
 from __future__ import absolute_import
 import custom_sugartensor as tf
-import logging
 import os
 import time
 import sys
-import re
-from tensorflow.python.ops import gen_logging_ops
 
 
-__author__ = 'namju.kim@kakaocorp.com'
+__author__ = 'buriburisuri@gmail.com'
 
 
 #
@@ -16,6 +13,7 @@ __author__ = 'namju.kim@kakaocorp.com'
 #
 
 
+# noinspection PyTypeChecker
 def sg_summary_loss(tensor, prefix='losses', name=None):
     r"""Register `tensor` to summary report as `loss`
 
@@ -32,10 +30,15 @@ def sg_summary_loss(tensor, prefix='losses', name=None):
     # summary name
     name = prefix + _pretty_name(tensor) if name is None else prefix + name
     # summary statistics
-    _scalar(name, tf.reduce_mean(tensor))
-    _histogram(name + '-h', tensor)
+    # noinspection PyBroadException
+    try:
+        tf.summary.scalar(name, tf.reduce_mean(tensor))
+        tf.summary.histogram(name + '-h', tensor)
+    except:
+        pass
 
 
+# noinspection PyTypeChecker
 def sg_summary_metric(tensor, prefix='metrics', name=None):
     r"""Register `tensor` to summary report as `metric`
 
@@ -52,8 +55,12 @@ def sg_summary_metric(tensor, prefix='metrics', name=None):
     # summary name
     name = prefix + _pretty_name(tensor) if name is None else prefix + name
     # summary statistics
-    _scalar(name, tf.reduce_mean(tensor))
-    _histogram(name + '-h', tensor)
+    # noinspection PyBroadException
+    try:
+        tf.summary.scalar(name, tf.reduce_mean(tensor))
+        tf.summary.histogram(name + '-h', tensor)
+    except:
+        pass
 
 
 def sg_summary_gradient(tensor, gradient, prefix=None, name=None):
@@ -71,11 +78,14 @@ def sg_summary_gradient(tensor, gradient, prefix=None, name=None):
     # defaults
     prefix = '' if prefix is None else prefix + '/'
     # summary name
-    name = prefix + _pretty_name(tensor) if name is None else prefix + name
+    name = prefix + _full_name(tensor) if name is None else prefix + name
     # summary statistics
     # noinspection PyBroadException
-    _scalar(name + '/grad', tf.reduce_mean(tf.abs(gradient)))
-    _histogram(name + '/grad-h', tf.abs(gradient))
+    try:
+        tf.summary.scalar(name + '/grad', tf.reduce_mean(tf.abs(gradient)))
+        tf.summary.histogram(name + '/grad-h', tf.abs(gradient))
+    except:
+        pass
 
 
 def sg_summary_activation(tensor, prefix=None, name=None):
@@ -94,9 +104,13 @@ def sg_summary_activation(tensor, prefix=None, name=None):
     # summary name
     name = prefix + _pretty_name(tensor) if name is None else prefix + name
     # summary statistics
-    _scalar(name + '/ratio',
-            tf.reduce_mean(tf.cast(tf.greater(tensor, 0), tf.sg_floatx)))
-    _histogram(name + '/ratio-h', tensor)
+    # noinspection PyBroadException
+    try:
+        tf.summary.scalar(name + '/ratio',
+                          tf.reduce_mean(tf.cast(tf.greater(tensor, 0), tf.sg_floatx)))
+        tf.summary.histogram(name + '/ratio-h', tensor)
+    except:
+        pass
 
 
 def sg_summary_param(tensor, prefix=None, name=None):
@@ -115,8 +129,13 @@ def sg_summary_param(tensor, prefix=None, name=None):
     # summary name
     name = prefix + _pretty_name(tensor) if name is None else prefix + name
     # summary statistics
-    _scalar(name + '/abs', tf.reduce_mean(tf.abs(tensor)))
-    _histogram(name + '/abs-h', tf.abs(tensor))
+    # noinspection PyBroadException
+    try:
+        norm = tensor
+        tf.summary.scalar(name + '/abs', tf.reduce_mean(tf.abs(tensor)))
+        tf.summary.histogram(name + '/abs-h', tf.abs(tensor))
+    except:
+        pass
 
 
 def sg_summary_image(tensor, prefix=None, name=None):
@@ -133,10 +152,13 @@ def sg_summary_image(tensor, prefix=None, name=None):
     # defaults
     prefix = '' if prefix is None else prefix + '/'
     # summary name
-    name = prefix + _pretty_name(tensor) if name is None else prefix + name
+    name = prefix + _full_name(tensor) if name is None else prefix + name
     # summary statistics
-    if not tf.get_variable_scope().reuse:
+    # noinspection PyBroadException
+    try:
         tf.summary.image(name + '-im', tensor)
+    except:
+        pass
 
 
 def sg_summary_audio(tensor, sample_rate=16000, prefix=None, name=None):
@@ -154,35 +176,31 @@ def sg_summary_audio(tensor, sample_rate=16000, prefix=None, name=None):
     # defaults
     prefix = '' if prefix is None else prefix + '/'
     # summary name
-    name = prefix + _pretty_name(tensor) if name is None else prefix + name
+    name = prefix + _full_name(tensor) if name is None else prefix + name
     # summary statistics
-    if not tf.get_variable_scope().reuse:
+    # noinspection PyBroadException
+    try:
         tf.summary.audio(name + '-au', tensor, sample_rate)
+    except:
+        pass
 
 
 def _pretty_name(tensor):
-    name = ''.join(tensor.name.split(':')[:-1])
-    return re.sub(r'gpu_[0-9]+/', '', name)
+    return ''.join(tensor.name.split(':')[:-1]).split('/')[-1]
 
 
-def _scalar(name, tensor):
-    if not tf.get_variable_scope().reuse and not tf.sg_get_context().reuse:
-        val = gen_logging_ops._scalar_summary(name, tensor)
-        tf.add_to_collection(tf.GraphKeys.SUMMARIES, val)
-
-
-def _histogram(name, tensor):
-    if not tf.get_variable_scope().reuse and not tf.sg_get_context().reuse:
-        val = gen_logging_ops._histogram_summary(name, tensor)
-        tf.add_to_collection(tf.GraphKeys.SUMMARIES, val)
+def _full_name(tensor):
+    return ''.join(tensor.name.split(':')[:-1])
 
 
 #
 # logger wrappers
 #
 
-_logger = logging.getLogger('SugarTensor')
-_logger.addHandler(logging.StreamHandler())
+# use tensorflow logger
+# pylint: disable=protected-access
+# noinspection PyProtectedMember
+_logger = tf.logging._logger
 
 
 def _log_prefix():
@@ -230,20 +248,20 @@ def sg_verbosity(verbosity=0):
 
 
 def sg_debug(msg, *args, **kwargs):
-    _logger.debug('D ' + _log_prefix() + msg, *args, **kwargs)
+    _logger.debug(_log_prefix() + msg, *args, **kwargs)
 
 
 def sg_info(msg, *args, **kwargs):
-    _logger.info('I ' + _log_prefix() + msg, *args, **kwargs)
+    _logger.info(_log_prefix() + msg, *args, **kwargs)
 
 
 def sg_warn(msg, *args, **kwargs):
-    _logger.warn('W ' + _log_prefix() + msg, *args, **kwargs)
+    _logger.warn(_log_prefix() + msg, *args, **kwargs)
 
 
 def sg_error(msg, *args, **kwargs):
-    _logger.error('E ' + _log_prefix() + msg, *args, **kwargs)
+    _logger.error(_log_prefix() + msg, *args, **kwargs)
 
 
 def sg_fatal(msg, *args, **kwargs):
-    _logger.fatal('F ' + _log_prefix() + msg, *args, **kwargs)
+    _logger.fatal(_log_prefix() + msg, *args, **kwargs)

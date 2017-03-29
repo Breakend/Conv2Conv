@@ -3,7 +3,7 @@ import six
 import collections
 
 
-__author__ = 'namju.kim@kakaocorp.com'
+__author__ = 'buriburisuri@gmail.com'
 
 
 class _Opt(collections.MutableMapping):
@@ -42,11 +42,11 @@ class _Opt(collections.MutableMapping):
 
     def __add__(self, other):
         r"""Overloads `+` operator.
-        
+
         It does NOT overwrite the existing item.
-        
+
         For example,
-        
+
         ```python
         import sugartensor as tf
 
@@ -63,11 +63,11 @@ class _Opt(collections.MutableMapping):
 
     def __mul__(self, other):
         r"""Overloads `*` operator.
-        
+
         It overwrites the existing item.
-        
+
         For example,
-        
+
         ```python
         import sugartensor as tf
 

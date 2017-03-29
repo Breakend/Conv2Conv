@@ -4,7 +4,7 @@ import custom_sugartensor as tf
 import numpy as np
 
 
-__author__ = 'namju.kim@kakaocorp.com'
+__author__ = 'buriburisuri@gmail.com'
 
 
 #
@@ -275,40 +275,6 @@ def sg_to_sparse(tensor, opt):
     return tf.SparseTensor(indices=indices,
                            values=tf.gather_nd(tensor, indices) - 1,  # for zero-based index
                            dense_shape=tf.shape(tensor).sg_cast(dtype=tf.int64))
-
-
-@tf.sg_sugar_func
-def sg_log(tensor, opt):
-    r"""Log transform a dense tensor
-
-    See `tf.log()` in tensorflow.
-
-    Args:
-      tensor: A `Tensor` ( automatically given by chain )
-      opt:
-        name: If provided, replace current tensor's name.
-
-    Returns:
-        A `Tensor`.
-    """
-    return tf.log(tensor + tf.sg_eps, name=opt.name)
-
-
-@tf.sg_sugar_func
-def sg_exp(tensor, opt):
-    r"""Exponential transform a dense tensor
-
-    See `tf.exp()` in tensorflow.
-
-    Args:
-      tensor: A `Tensor` ( automatically given by chain )
-      opt:
-        name: If provided, replace current tensor's name.
-
-    Returns:
-        A `Tensor`.
-    """
-    return tf.exp(tensor, name=opt.name)
 
 
 #

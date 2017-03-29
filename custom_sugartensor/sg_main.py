@@ -3,13 +3,11 @@ import types
 from functools import wraps
 import importlib
 from contextlib import contextmanager
-from tensorflow.python.client import device_lib
-
 
 import custom_sugartensor as tf
 
 
-__author__ = 'namju.kim@kakaocorp.com'
+__author__ = 'buriburisuri@gmail.com'
 
 
 #
@@ -43,6 +41,8 @@ def sg_global_step():
 #
 
 _phase = tf.Variable(False, name='phase', trainable=False, collections=[tf.GraphKeys.LOCAL_VARIABLES])
+_phase_train = _phase.assign(True)    # phase set ops ( to train )
+_phase_infer = _phase.assign(False)   # phase set ops ( to infer )
 
 
 def sg_phase():
@@ -54,33 +54,36 @@ def sg_phase():
     global _phase
     return _phase
 
-#
-# available GPU nums
-#
 
-_gpus = None
+def sg_set_train(sess):
+    r"""Set current phase as training mode
 
-
-def sg_gpus():
-    r""" Gets current available GPU nums
+    Args:
+      sess: session to work
 
     Returns:
-      A integer : total # of GPUs available
+      None
     """
-    global _gpus
+    sess.run(_phase_train)
 
-    if _gpus is None:
-        local_device_protos = device_lib.list_local_devices()
-        _gpus = len([x.name for x in local_device_protos if x.device_type == 'GPU'])
 
-    return max(_gpus, 1)
+def sg_set_infer(sess):
+    r"""Sets current phase as inference mode
+
+    Args:
+      sess: session to work
+
+    Returns:
+      None
+    """
+    sess.run(_phase_infer)
 
 
 #
 # context helpers
 #
 
-_context = []
+_context = tf.sg_opt()
 
 
 @contextmanager
@@ -114,39 +117,17 @@ def sg_context(**kwargs):
       None
     """
     global _context
-
     # set options when enter
-    context_now = tf.sg_opt(kwargs)
-    _context += [context_now]
-
-    # if named context
-    if context_now.name:
-        context_now.scope_name = context_now.name
-        context_now.name = None
-        with tf.variable_scope(context_now.scope_name):
+    _context = tf.sg_opt(kwargs)
+    if _context.name:
+        _context.context_name = _context.name
+        _context.name = None
+        with tf.variable_scope(_context.context_name):
             yield
     else:
         yield
-
     # clear options when exit
-    del _context[-1]
-
-
-def sg_get_context():
-    r"""Get current context information
-
-    Returns:
-      tf.sg_opt class object which contains all context information
-    """
-
-    global _context
-
-    # merge current context
-    res = tf.sg_opt()
-    for c in _context:
-        res += c
-
-    return res
+    _context = tf.sg_opt()
 
 
 #
@@ -169,7 +150,7 @@ def sg_sugar_func(func):
         # call sugar function
         out = func(tensor, tf.sg_opt(kwargs))
         # save node info for reuse
-        out._sugar = tf.sg_opt(func=func, arg=tf.sg_opt(kwargs)+sg_get_context(), prev=tensor)
+        out._sugar = tf.sg_opt(func=func, arg=tf.sg_opt(kwargs)+_context, prev=tensor)
         # inject reuse function
         out.sg_reuse = types.MethodType(sg_reuse, out)
         return out
@@ -206,29 +187,19 @@ def sg_layer_func(func):
             act: A name of activation function. e.g., `sigmoid`, `tanh`, etc.
             reuse: `True` or `None`; if `True`, we go into reuse mode for this `layer` scope
               as well as all sub-scopes; if `None`, we just inherit the parent scope reuse.
-            regularizer:  A string. None, 'l1' or 'l2'. The default is None
-            summary: If True, summaries are added. The default is True.
         """
 
         from . import sg_initializer as init
         from . import sg_activation
 
         # kwargs parsing
-        opt = tf.sg_opt(kwargs) + sg_get_context()
+        opt = tf.sg_opt(kwargs) + _context
 
         # set default argument
         try:
             shape = tensor.get_shape().as_list()
             # batch normalization off, layer normalization off, dropout off
-            opt += tf.sg_opt(shape=shape, in_dim=shape[-1], dim=shape[-1],
-                             bn=False, ln=False, dout=0, summary=True)
-            if opt.regularizer == 'l1':
-                opt.regularizer = lambda x: tf.reduce_mean(tf.abs(x))
-            elif opt.regularizer == 'l2':
-                opt.regularizer = lambda x: tf.square(tf.reduce_mean(tf.square(x)))
-            else:
-                opt.regularizer = None
-
+            opt += tf.sg_opt(shape=shape, in_dim=shape[-1], dim=shape[-1], bn=False, ln=False, dout=0)
             assert not (opt.bn and opt.ln), 'one of batch normalization and layer normalization is available.'
 
             # disable bias when normalization on
@@ -269,12 +240,12 @@ def sg_layer_func(func):
                 beta = init.constant('beta', opt.dim)
                 gamma = init.constant('gamma', opt.dim, value=1)
 
+                # offset, scale parameter
+                mean_running = init.constant('mean', opt.dim)
+                variance_running = init.constant('variance', opt.dim, value=1)
+
                 # calc batch mean, variance
                 mean, variance = tf.nn.moments(out, axes=list(range(len(out.get_shape()) - 1)))
-
-                # offset, scale parameter ( for inference )
-                mean_running = init.constant('mean', opt.dim, trainable=False)
-                variance_running = init.constant('variance', opt.dim, value=1, trainable=False)
 
                 # add running mean, variance to UPDATE_OP collection
                 decay = 0.99
@@ -317,10 +288,11 @@ def sg_layer_func(func):
             out = tf.identity(out, 'out')
 
             # add final output summary
-            tf.sg_summary_activation(out)
+            if not scope.reuse:
+                tf.sg_summary_activation(out)
 
             # save node info for reuse
-            out._sugar = tf.sg_opt(func=func, arg=tf.sg_opt(kwargs) + sg_get_context(),
+            out._sugar = tf.sg_opt(func=func, arg=tf.sg_opt(kwargs) + _context,
                                    prev=tensor, is_layer=True, name=opt.name)
             # inject reuse function
             out.sg_reuse = types.MethodType(sg_reuse, out)
@@ -349,17 +321,16 @@ def sg_rnn_layer_func(func):
               name: A name for the layer. As a default, the function name is assigned.
               reuse: `True` or `None`; if `True`, we go into reuse mode for this `layer` scope
                 as well as all sub-scopes; if `None`, we just inherit the parent scope reuse.
-              summary: If True, summaries are added. The default is True.
         """
 
         # kwargs parsing
-        opt = tf.sg_opt(kwargs) + sg_get_context()
+        opt = tf.sg_opt(kwargs) + _context
 
         # set default argument
         try:
             shape = tensor.get_shape().as_list()
             # dropout off
-            opt += tf.sg_opt(shape=shape, in_dim=shape[-1], dim=shape[-1], dout=0, summary=True)
+            opt += tf.sg_opt(shape=shape, in_dim=shape[-1], dim=shape[-1], dout=0)
             # disable bias when normalization on
             opt += tf.sg_opt(bias=not opt.ln)
         finally:
@@ -402,10 +373,11 @@ def sg_rnn_layer_func(func):
             out = tf.identity(out, 'out')
 
             # add final output summary
-            tf.sg_summary_activation(out)
+            if scope.reuse:
+                tf.sg_summary_activation(out)
 
             # save node info for reuse
-            out._sugar = tf.sg_opt(func=func, arg=tf.sg_opt(kwargs) + sg_get_context(),
+            out._sugar = tf.sg_opt(func=func, arg=tf.sg_opt(kwargs) + _context,
                                    prev=tensor, is_layer=True, name=opt.name)
             # inject reuse function
             out.sg_reuse = types.MethodType(sg_reuse, out)
@@ -448,8 +420,8 @@ def sg_reuse(tensor, **opt):
     for node in nodes[1:]:  # exclude head node
         if node._sugar.is_layer:
             fn = tf.sg_layer_func(node._sugar.func)
-            if node._sugar.arg.scope_name:
-                with tf.variable_scope(node._sugar.arg.scope_name):
+            if node._sugar.arg.context_name:
+                with tf.variable_scope(node._sugar.arg.context_name):
                     out = fn(out, **(node._sugar.arg + tf.sg_opt(name=node._sugar.name, reuse=True)))
             else:
                 out = fn(out, **(node._sugar.arg + tf.sg_opt(name=node._sugar.name, reuse=True)))
@@ -558,42 +530,6 @@ def sg_queue_context(sess=None):
         coord.request_stop()
         # wait thread to exit.
         coord.join(threads)
-
-
-#
-# Multiple GPU tower Wrapper
-#
-
-def sg_parallel(func):
-    r"""Decorates function as multiple gpu support towers.
-    Args:
-        func: function to decorate
-    """
-    @wraps(func)
-    def wrapper(**kwargs):
-        r"""Manages arguments of `tf.sg_opt`.
-
-        Args:
-          kwargs: keyword arguments. The wrapped function will be provided with gpu_index argument.
-        """
-        # parse option
-        opt = tf.sg_opt(kwargs)
-
-        # loop for all available GPUs
-        res = []
-        for i in range(sg_gpus()):
-            # specify device
-            with tf.device('/gpu:%d' % i):
-                # give new scope only to operation
-                with tf.name_scope('gpu_%d' % i):
-                    # save reuse flag
-                    with sg_context(reuse=(True if i > 0 else False)):
-                        # call function
-                        res.append(func(opt * tf.sg_opt(gpu_index=i)))
-
-        return res
-
-    return wrapper
 
 
 #

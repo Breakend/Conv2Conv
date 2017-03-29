@@ -2,12 +2,18 @@ from __future__ import absolute_import, print_function, unicode_literals
 import custom_sugartensor as tf
 # noinspection PyPackageRequirements
 import numpy as np
+import os
 import time
 from tqdm import tqdm
 from functools import wraps
+from tensorflow.contrib.tensorboard.plugins import projector
 
 
 __author__ = 'buriburisuri@gmail.com'
+
+
+# global learning rate
+_learning_rate = tf.Variable(0.001, dtype=tf.sg_floatx, name='learning_rate', trainable=False)
 
 
 def sg_train(**kwargs):
@@ -15,12 +21,18 @@ def sg_train(**kwargs):
 
     Args:
       **kwargs:
-        optim: A name for optimizer. 'MaxProp' (default), 'AdaMax', 'Adam', 'RMSProp' or 'sgd'.
+        optim: A name for optimizer. 'MaxProp' (default), 'AdaMax', 'Adam', or 'sgd'.
         loss: A 0-D `Tensor` containing the value to minimize.
         lr: A Python Scalar (optional). Learning rate. Default is .001.
         beta1: A Python Scalar (optional). Default is .9.
         beta2: A Python Scalar (optional). Default is .99.
 
+        eval_metric: A list of tensors containing the value to evaluate. Default is [].
+        early_stop: Boolean. If True (default), the training should stop when the following two conditions are met.
+          i. Current loss is less than .95 * previous loss.
+          ii. Current learning rate is less than 5e-6.
+        lr_reset: Boolean. If True, learning rate is set to opt.lr. when training restarts.
+          Otherwise (Default), the value of the stored `_learning_rate` is taken.
         save_dir: A string. The root path to which checkpoint and log files are saved.
           Default is `asset/train`.
         max_ep: A positive integer. Maximum number of epochs. Default is 1000.
@@ -36,34 +48,25 @@ def sg_train(**kwargs):
 
         category: Scope name or list to train
 
-        eval_metric: A list of tensors containing the value to evaluate. Default is [].
-
-        tqdm: Boolean. If True (Default), progress bars are shown. If False, a series of loss
-            will be shown on the console.
-
+        tqdm: Boolean. If True (Default), progress bars are shown.
+        console_log: Boolean. If True, a series of loss will be shown
+          on the console instead of tensorboard. Default is False.
     """
     opt = tf.sg_opt(kwargs)
     assert opt.loss is not None, 'loss is mandatory.'
 
     # default training options
-    opt += tf.sg_opt(optim='MaxProp', lr=0.001, beta1=0.9, beta2=0.99, category='', ep_size=100000)
+    opt += tf.sg_opt(optim='MaxProp', lr=0.001, beta1=0.9, beta2=0.99, category='')
 
     # get optimizer
-    train_op = sg_optim(opt.loss, optim=opt.optim, lr=0.001,
+    train_op = sg_optim(opt.loss, optim=opt.optim, lr=_learning_rate,
                         beta1=opt.beta1, beta2=opt.beta2, category=opt.category)
-
-    # for console logging
-    loss_ = opt.loss
-
-    # use only first loss when multiple GPU case
-    if isinstance(opt.loss, (tuple, list)):
-        loss_ = opt.loss[0]
 
     # define train function
     # noinspection PyUnusedLocal
     @sg_train_func
     def train_func(sess, arg):
-        return sess.run([loss_, train_op])[0]
+        return sess.run([opt.loss] + train_op)[0]
 
     # run train function
     train_func(**opt)
@@ -108,7 +111,7 @@ def sg_print(tensor_list):
         tensor_list = [tensor_list]
 
     # evaluate tensor list with queue runner
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+    with tf.Session() as sess:
         sg_init(sess)
         with tf.sg_queue_context():
             res = sess.run(tensor_list)
@@ -152,9 +155,9 @@ def sg_optim(loss, **kwargs):
     r"""Applies gradients to variables.
 
     Args:
-        loss: A 0-D `Tensor` containing the value to minimize. list of 0-D tensor for Multiple GPU
+        loss: A 0-D `Tensor` containing the value to minimize.
         kwargs:
-          optim: A name for optimizer. 'MaxProp' (default), 'AdaMax', 'Adam', 'RMSProp' or 'sgd'.
+          optim: A name for optimizer. 'MaxProp' (default), 'AdaMax', 'Adam', or 'sgd'.
           lr: A Python Scalar (optional). Learning rate. Default is .001.
           beta1: A Python Scalar (optional). Default is .9.
           beta2: A Python Scalar (optional). Default is .99.
@@ -188,41 +191,18 @@ def sg_optim(loss, **kwargs):
     else:
         var_list = [t for t in tf.trainable_variables() if t.name.startswith(opt.category)]
 
-    #
     # calc gradient
-    #
+    gradient = optim.compute_gradients(loss, var_list=var_list)
 
-    # multiple GPUs case
-    if isinstance(loss, (tuple, list)):
-        gradients = []
-        # loop for each GPU tower
-        for i, loss_ in enumerate(loss):
-            # specify device
-            with tf.device('/gpu:%d' % i):
-                # give new scope only to operation
-                with tf.name_scope('gpu_%d' % i):
-                    # add gradient calculation operation for each GPU tower
-                    gradients.append(tf.gradients(loss_, var_list))
-
-        # averaging gradient
-        gradient = []
-        for grad in zip(*gradients):
-            gradient.append(tf.add_n(grad) / len(loss))
-    # single GPU case
-    else:
-        gradient = tf.gradients(loss, var_list)
-
-    # gradient update op
-    with tf.device('/gpu:0'):
-        grad_var = [(g, v) for g, v in zip(gradient, var_list)]
-        grad_op = optim.apply_gradients(grad_var, global_step=tf.sg_global_step())
-
-    # add summary using last tower value
-    for g, v in grad_var:
+    # add summary
+    for v, g in zip(var_list, gradient):
         # exclude batch normal statics
         if 'mean' not in v.name and 'variance' not in v.name \
                 and 'beta' not in v.name and 'gamma' not in v.name:
             tf.sg_summary_gradient(v, g)
+
+    # gradient update op
+    grad_op = optim.apply_gradients(gradient, global_step=tf.sg_global_step())
 
     # extra update ops within category ( for example, batch normal running stat update )
     if isinstance(opt.category, (tuple, list)):
@@ -232,7 +212,7 @@ def sg_optim(loss, **kwargs):
     else:
         update_op = [t for t in tf.get_collection(tf.GraphKeys.UPDATE_OPS) if t.name.startswith(opt.category)]
 
-    return tf.group(*([grad_op] + update_op))
+    return [grad_op] + update_op
 
 
 def sg_train_func(func):
@@ -249,6 +229,12 @@ def sg_train_func(func):
           **kwargs:
             lr: A Python Scalar (optional). Learning rate. Default is .001.
 
+            eval_metric: A list of tensors containing the value to evaluate. Default is [].
+            early_stop: Boolean. If True (default), the training should stop when the following two conditions are met.
+              i. Current loss is less than .95 * previous loss.
+              ii. Current learning rate is less than 5e-6.
+            lr_reset: Boolean. If True, learning rate is set to opt.lr. when training restarts.
+              Otherwise (Default), the value of the stored `_learning_rate` is taken.
             save_dir: A string. The root path to which checkpoint and log files are saved.
               Default is `asset/train`.
             max_ep: A positive integer. Maximum number of epochs. Default is 1000.
@@ -262,10 +248,9 @@ def sg_train_func(func):
             max_keep: A positive integer. Maximum number of recent checkpoints to keep. Default is 5.
             keep_interval: A Python scalar. How often to keep checkpoints. Default is 1 hour.
 
-            eval_metric: A list of tensors containing the value to evaluate. Default is [].
-
-            tqdm: Boolean. If True (Default), progress bars are shown. If False, a series of loss
-                will be shown on the console.
+            tqdm: Boolean. If True (Default), progress bars are shown.
+            console_log: Boolean. If True, a series of loss will be shown
+              on the console instead of tensorboard. Default is False.
         """
         opt = tf.sg_opt(kwargs)
 
@@ -274,112 +259,170 @@ def sg_train_func(func):
                          save_dir='asset/train',
                          max_ep=1000, ep_size=100000,
                          save_interval=600, log_interval=60,
+                         early_stop=True, lr_reset=False,
                          eval_metric=[],
                          max_keep=5, keep_interval=1,
-                         tqdm=True)
+                         tqdm=True, console_log=False)
 
-        # training epoch and loss
-        epoch, loss = -1, None
+        # make directory if not exist
+        if not os.path.exists(opt.save_dir):
+            os.makedirs(opt.save_dir)
+
+        # find last checkpoint
+        last_file = tf.train.latest_checkpoint(opt.save_dir)
+        if last_file:
+            ep = start_ep = int(last_file.split('-')[1]) + 1
+            start_step = int(last_file.split('-')[2])
+        else:
+            ep = start_ep = 1
+            start_step = 0
 
         # checkpoint saver
         saver = tf.train.Saver(max_to_keep=opt.max_keep,
                                keep_checkpoint_every_n_hours=opt.keep_interval)
 
-        # add evaluation summary
+        # summary writer
+        summary_writer = tf.summary.FileWriter(opt.save_dir, graph=tf.get_default_graph())
+
+        # add learning rate summary
+        tf.summary.scalar('learning_r', _learning_rate)
+
+        # add evaluation metric summary
         for m in opt.eval_metric:
             tf.sg_summary_metric(m)
 
-        # summary writer
-        log_dir = opt.save_dir + '/run-%02d%02d-%02d%02d' % tuple(time.localtime(time.time()))[1:5]
-        summary_writer = tf.summary.FileWriter(log_dir)
-
-        # console logging function
-        def console_log(sess_):
-            if epoch >= 0:
-                tf.sg_info('\tEpoch[%03d:gs=%d] - loss = %s' %
-                           (epoch, sess_.run(tf.sg_global_step()),
-                            ('NA' if loss is None else '%8.6f' % loss)))
-
-        # create supervisor
-        sv = tf.train.Supervisor(logdir=opt.save_dir,
-                                 saver=saver,
-                                 save_model_secs=opt.save_interval,
-                                 summary_writer=summary_writer,
-                                 save_summaries_secs=opt.log_interval,
-                                 global_step=tf.sg_global_step(),
-                                 local_init_op=tf.sg_phase().assign(True))
+        # summary op
+        summary_op = tf.summary.merge_all()
 
         # create session
-        with sv.managed_session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+        if opt.sess:
+            sess = opt.sess
+        else:
+            # session with multiple GPU support
+            sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=True))
+        # initialize variables
+        sg_init(sess)
 
-            # console logging loop
-            if not opt.tqdm:
-                sv.loop(opt.log_interval, console_log, args=(sess, ))
+        # restore last checkpoint
+        if last_file:
+            saver.restore(sess, last_file)
 
-            # get start epoch
-            _step = sess.run(tf.sg_global_step())
-            ep = _step // opt.ep_size
+        # set learning rate
+        if start_ep == 1 or opt.lr_reset:
+            sess.run(_learning_rate.assign(opt.lr))
 
-            # check if already finished
-            if ep <= opt.max_ep:
+        # logging
+        tf.sg_info('Training started from epoch[%03d]-step[%d].' % (start_ep, start_step))
 
-                # logging
-                tf.sg_info('Training started from epoch[%03d]-step[%d].' % (ep, _step))
+        try:
+            # start data queue runner
+            with tf.sg_queue_context(sess):
+
+                # set session mode to train
+                tf.sg_set_train(sess)
+
+                # loss history for learning rate decay
+                loss, loss_prev, early_stopped = None, None, False
+
+                # time stamp for saving and logging
+                last_saved = last_logged = time.time()
 
                 # epoch loop
-                for ep in range(ep, opt.max_ep + 1):
+                for ep in range(start_ep, opt.max_ep + 1):
 
-                    # update epoch info
-                    start_step = sess.run(tf.sg_global_step()) % opt.ep_size
-                    epoch = ep
-
-                    # create progressbar iterator
+                    # show progressbar
                     if opt.tqdm:
-                        iterator = tqdm(range(start_step, opt.ep_size), total=opt.ep_size, initial=start_step,
-                                        desc='train', ncols=70, unit='b', leave=False)
+                        iterator = tqdm(range(opt.ep_size), desc='train', ncols=70, unit='b', leave=False)
                     else:
-                        iterator = range(start_step, opt.ep_size)
+                        iterator = range(opt.ep_size)
 
                     # batch loop
                     for _ in iterator:
-
-                        # exit loop
-                        if sv.should_stop():
-                            break
 
                         # call train function
                         batch_loss = func(sess, opt)
 
                         # loss history update
-                        if batch_loss is not None and \
-                                not np.isnan(batch_loss.all()) and not np.isinf(batch_loss.all()):
+                        if batch_loss is not None:
                             if loss is None:
                                 loss = np.mean(batch_loss)
                             else:
                                 loss = loss * 0.9 + np.mean(batch_loss) * 0.1
 
+                        # saving
+                        if time.time() - last_saved > opt.save_interval:
+                            last_saved = time.time()
+                            saver.save(sess, opt.save_dir + '/model-%03d' % ep,
+                                       write_meta_graph=False,
+                                       global_step=sess.run(tf.sg_global_step()))
+
+                        # logging
+                        if time.time() - last_logged > opt.log_interval:
+                            last_logged = time.time()
+
+                            # set session mode to infer
+                            tf.sg_set_infer(sess)
+
+                            # run evaluation op
+                            if len(opt.eval_metric) > 0:
+                                sess.run(opt.eval_metric)
+
+                            if opt.console_log:   # console logging
+                                # log epoch information
+                                tf.sg_info('\tEpoch[%03d:lr=%7.5f:gs=%d] - loss = %s' %
+                                           (ep, sess.run(_learning_rate), sess.run(tf.sg_global_step()),
+                                            ('NA' if loss is None else '%8.6f' % loss)))
+                            else:   # tensorboard logging
+                                # run logging op
+                                summary_writer.add_summary(sess.run(summary_op),
+                                                           global_step=sess.run(tf.sg_global_step()))
+
+                            # learning rate decay
+                            if opt.early_stop and loss_prev:
+                                # if loss stalling
+                                if loss >= 0.95 * loss_prev:
+                                    # early stopping
+                                    current_lr = sess.run(_learning_rate)
+                                    if current_lr < 5e-6:
+                                        early_stopped = True
+                                        break
+                                    else:
+                                        # decrease learning rate by half
+                                        sess.run(_learning_rate.assign(current_lr / 2.))
+
+                            # update loss history
+                            loss_prev = loss
+
+                            # revert session mode to train
+                            tf.sg_set_train(sess)
+
                     # log epoch information
-                    console_log(sess)
+                    if not opt.console_log:
+                        tf.sg_info('\tEpoch[%03d:lr=%7.5f:gs=%d] - loss = %s' %
+                                   (ep, sess.run(_learning_rate), sess.run(tf.sg_global_step()),
+                                    ('NA' if loss is None else '%8.6f' % loss)))
 
-                # save last version
-                saver.save(sess, opt.save_dir + '/model.ckpt', global_step=sess.run(tf.sg_global_step()))
+                    if early_stopped:
+                        tf.sg_info('\tEarly stopped ( no loss progress ).')
+                        break
+        finally:
+            # save last epoch
+            saver.save(sess, opt.save_dir + '/model-%03d' % ep,
+                       write_meta_graph=False,
+                       global_step=sess.run(tf.sg_global_step()))
 
-                # logging
-                tf.sg_info('Training finished at epoch[%d]-step[%d].' % (ep, sess.run(tf.sg_global_step())))
-            else:
-                tf.sg_info('Training already finished at epoch[%d]-step[%d].' %
-                           (ep - 1, sess.run(tf.sg_global_step())))
+            # set session mode to infer
+            tf.sg_set_infer(sess)
+
+            # logging
+            tf.sg_info('Training finished at epoch[%d]-step[%d].' % (ep, sess.run(tf.sg_global_step())))
+
+            # close session
+            if opt.sess is None:
+                sess.close()
 
     return wrapper
 
-
-def sg_regularizer_loss(scale=1.0):
-    r""" Get regularizer losss
-
-    Args:
-      scale: A scalar. A weight applied to regularizer loss
-    """
-    return scale * tf.reduce_mean(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
 # Under construction
 # def sg_tsne(tensor, meta_file='metadata.tsv', save_dir='asset/tsne'):

@@ -2,7 +2,7 @@ from __future__ import absolute_import
 import custom_sugartensor as tf
 
 
-__author__ = 'namju.kim@kakaocorp.com'
+__author__ = 'buriburisuri@gmail.com'
 
 
 #

@@ -5,7 +5,7 @@ import threading
 from tensorflow.python.platform import tf_logging as logging
 
 
-__author__ = 'namju.kim@kakaocorp.com'
+__author__ = 'buriburisuri@gmail.com'
 
 
 def sg_producer_func(func):
@@ -21,8 +21,7 @@ def sg_producer_func(func):
         Args:
           **kwargs:
             source: A source queue list to enqueue
-            dtypes: Input data types of each tensor
-            out_dtypes: Output data types of each tensor ( If None, same as dtypes )
+            dtypes: Data types of each tensor
             capacity: Queue capacity. Default is 32.
             num_threads: Number of threads. Default is 1.
         """
@@ -36,11 +35,6 @@ def sg_producer_func(func):
             opt.source = [opt.source]
         if type(opt.dtypes) is not list and type(opt.dtypes) is not tuple:
             opt.dtypes = [opt.dtypes]
-        # default out_dtypes
-        if opt.out_dtypes is None:
-            opt.out_dtypes = opt.dtypes
-        if type(opt.out_dtypes) is not list and type(opt.out_dtypes) is not tuple:
-            opt.out_dtypes = [opt.out_dtypes]
         assert len(opt.source) == len(opt.dtypes), 'Source and dtypes should have same length.'
 
         # enqueue function
@@ -60,7 +54,7 @@ def sg_producer_func(func):
             placeholders.append(tf.placeholder(dtype=dtype))
 
         # create FIFO queue
-        queue = tf.FIFOQueue(opt.capacity, dtypes=opt.out_dtypes)
+        queue = tf.FIFOQueue(opt.capacity, dtypes=opt.dtypes)
 
         # enqueue operation
         enqueue_op = queue.enqueue(placeholders)
@@ -112,8 +106,6 @@ class _FuncQueueRunner(tf.train.QueueRunner):
                                 # Intentionally ignore errors from close_op.
                                 logging.vlog(1, "Ignored exception: %s", str(e))
                         return
-                except ValueError:  # ignore value error defined by queueing function
-                    pass
         except Exception as e:
             # This catches all other exceptions.
             if coord:
