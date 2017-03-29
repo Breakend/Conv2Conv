@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import argparse
-from helper_ops import *
-import sugartensor as tf
+import custom_sugartensor as tf
 from twitter_data_large import TwitterDataFeeder
 
 # Note: modified from https://github.com/buriburisuri/ByteNet
@@ -151,7 +150,7 @@ optim = tf.sg_optimize.MaxPropOptimizer(learning_rate=0.00005)
 
 tf.sg_init(sess)
 
-custom_train(sess=sess, optim=optim, log_interval=30, lr=0.00005, loss=loss,
+tf.sg_train(sess=sess, optim=optim, log_interval=30, lr=0.00005, loss=loss,
             ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True)
 
 data.cleanup_tensorflow_stuff()

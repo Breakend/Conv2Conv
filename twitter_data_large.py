@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import sugartensor as tf
+import tensorflow as tf
 import numpy as np
 import threading
 
@@ -71,7 +71,7 @@ class TwitterDataFeeder(object):
         self.num_batch = len(sources) // batch_size
 
         # print info
-        tf.sg_info('Train data loaded.(total data=%d, total batch=%d)' % (len(sources), self.num_batch))
+        print('Train data loaded.(total data=%d, total batch=%d)' % (len(sources), self.num_batch))
 
     def launch_data_threads(self):
         self.enqueue_thread.isDaemon()
