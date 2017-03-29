@@ -206,6 +206,6 @@ u"They're nice people."
 
 tf.sg_train(sess=sess, optim=optim, log_interval=30, lr=0.00005, loss=loss,
             ep_size=data.num_batch, max_ep=100, early_stop=False, lr_reset=True,
-            validation_op = helper_ops.validation_op, val_label=dec, val_batches=data.to_batches([x.lower() for x in orig_sources]), x=x, y_src=y_src)
+            validation_op = helper_ops.validation_op, val_label=dec, val_batches=data.to_batches([orig_src.lower() for orig_src in orig_sources]), x=x, y_src=y_src, data=data)
 
 data.cleanup_tensorflow_stuff()

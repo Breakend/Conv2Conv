@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 
-def validation_op(label, loss, sess, batches, x, y_src):
+def validation_op(label, loss_func, sess, batches, x, y_src, data):
     """batches : sentence batches to be used for validation"""
     # to batch form
     # batches = data.to_batches(orig_sources)
@@ -51,7 +51,7 @@ def validation_op(label, loss, sess, batches, x, y_src):
         # generate output sequence
         for i in range(max_len):
             # predict character
-            out,loss = sess.run([label, loss], {x: sources, y_src: pred_prev})
+            out,loss = sess.run([label, loss_func], {x: sources, y_src: pred_prev})
             losses.append(loss)
             # update character sequence
             if i < max_len - 1:
