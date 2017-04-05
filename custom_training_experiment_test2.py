@@ -62,28 +62,28 @@ y_src = tf.concat(axis=1, values=[tf.zeros((batch_size, 1), tf.sg_intx), y[:, :-
 @tf.sg_sugar_func
 def sg_res_block(tensor, opt):
     # default rate
-    opt += tf.sg_opt(size=3, rate=1, causal=False)
+    opt += tf.sg_opt(size=3, rate=1, causal=False, is_first=False)
 
     # input dimension
     in_dim = tensor.get_shape().as_list()[-1]
 
     # reduce dimension
-    input_ = (tensor
-              .sg_bypass(act='relu', bn=(not opt.causal), ln=opt.causal)
-              .sg_conv1d(size=1, dim=in_dim/2, act='relu', bn=(not opt.causal), ln=opt.causal))
+    with tf.sg_context(name='block_%d_%d' % (opt.block, opt.rate)):
+        input_ = (tensor
+                  .sg_bypass(act='relu', ln=(not opt.is_first), name='bypass')
+                  .sg_conv1d(size=1, dim=in_dim/2, act='relu', ln=True))
 
-    # 1xk conv dilated
-    out = input_.sg_aconv1d(size=opt.size, rate=opt.rate, causal=opt.causal, bn=(not opt.causal), ln=opt.causal)
+        # 1xk conv dilated
+        if opt.conditional is not None:
+            out = input_.sg_aconv1d(size=opt.size, rate=opt.rate, causal=opt.causal, ln=True, name='aconv')
+            out1 = out + opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
+            out2 = out + opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
+            out = out1.sg_tanh() * out2.sg_sigmoid()
+        else:
+            out = input_.sg_aconv1d(size=opt.size, rate=opt.rate, causal=opt.causal, ln=True, name='aconv', act='relu')
 
-    if opt.conditional is not None:
-        out1 = out + opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
-        out2 = out + opt.conditional.sg_conv1d(size=1, stride=1, in_dim=gc_latent_dim, dim=in_dim/2, pad="SAME", bias=False)
-        out = out1.sg_tanh() * out2.sg_sigmoid()
-    else:
-        out = out.sg_relu()
-
-    # dimension recover and residual connection
-    out = out.sg_conv1d(size=1, dim=in_dim) + tensor
+        # dimension recover and residual connection
+        out = out.sg_conv1d(size=1, dim=in_dim, name='conv_out') + tensor
 
     return out
 
@@ -100,11 +100,11 @@ enc = x.sg_lookup(emb=emb_x)
 # loop dilated conv block
 for i in range(num_blocks):
     enc = (enc
-           .sg_res_block(size=5, rate=1)
-           .sg_res_block(size=5, rate=2)
-           .sg_res_block(size=5, rate=4)
-           .sg_res_block(size=5, rate=8)
-           .sg_res_block(size=5, rate=16))
+           .sg_res_block(size=5, block=i, rate=1, is_first=True)
+           .sg_res_block(size=5, block=i, rate=2)
+           .sg_res_block(size=5, block=i, rate=4)
+           .sg_res_block(size=5, block=i, rate=8)
+           .sg_res_block(size=5, block=i, rate=16))
 
 
 # concat merge target source
@@ -126,14 +126,14 @@ else:
 # loop dilated causal conv block
 for i in range(num_blocks):
     dec = (dec
-           .sg_res_block(size=3, rate=1, causal=True, conditional=enc)
-           .sg_res_block(size=3, rate=2, causal=True, conditional=enc)
-           .sg_res_block(size=3, rate=4, causal=True, conditional=enc)
-           .sg_res_block(size=3, rate=8, causal=True, conditional=enc)
-           .sg_res_block(size=3, rate=16, causal=True, conditional=enc))
+           .sg_res_block(size=3, rate=1, block=i, causal=True, conditional=enc, is_first=True)
+           .sg_res_block(size=3, rate=2,block=i, causal=True, conditional=enc)
+           .sg_res_block(size=3, rate=4, block=i, causal=True, conditional=enc)
+           .sg_res_block(size=3, rate=8, block=i, causal=True, conditional=enc)
+           .sg_res_block(size=3, rate=16, block=i, causal=True, conditional=enc))
 
 # final fully convolution layer for softmax
-dec = dec.sg_conv1d(size=1, dim=data.voca_size)
+dec = dec.sg_conv1d(size=1, dim=data.voca_size, name='conv_final')
 
 # cross entropy loss with logit and mask
 loss = dec.sg_ce(target=y, mask=True)
