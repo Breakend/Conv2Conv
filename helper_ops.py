@@ -35,7 +35,7 @@ def validation_op(label, loss_func, sess, batches, x, y_src, data):
                     break
         return False
 
-    label = tf.log(tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32))
+    # label = tf.log(tf.cast(tf.nn.softmax(tf.cast(label, tf.float64)), tf.float32))
     label = label.sg_argmax()
 
     batch_size = len(batches[0])
